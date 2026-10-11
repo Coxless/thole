@@ -18,4 +18,7 @@ python-source = "python"
 module-name = "thole._thole"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Tests of the package itself are in tests/. Tests of each area live next to
+# the Rust code they exercise, in crates/<crate>/python/.
+testpaths = ["tests", "../../crates/*/python"]
+addopts = ["--import-mode=importlib"]

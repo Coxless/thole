@@ -17,7 +17,12 @@ A family of scientific computing crates written in pure Rust. It does not rely o
 | `crates/thole-linalg` | Matrix types, LU decomposition and so on |
 | `crates/thole-ode` | Ordinary differential equations |
 | `bindings/python` | The Python package `thole` (PyO3 + maturin) |
-| `lean` | Lean 4 proofs |
+
+Each area keeps its Lean proofs in `crates/<crate>/lean/` and its Python tests in `crates/<crate>/python/`, next to the Rust code in `src/`.
+
+| Area | Algorithm | Lean proofs |
+|---|---|---|
+| `thole-roots` | Bisection | [`Bisection.lean`](crates/thole-roots/lean/Thole/Roots/Bisection.lean): the bracket always contains a root; error at most `(b - a) / 2 ^ (n + 1)` after `n` steps; convergence. Rust implementation pending. |
 
 ## Development
 
@@ -26,7 +31,7 @@ The development environment is provided by [Canonical Workshop](https://ubuntu.c
 ```sh
 workshop launch          # first time only: build and start the environment
 workshop start           # resume it if it is stopped
-workshop run -- setup    # fetch dependencies, create the Python environment, fetch Lean
+workshop run -- setup    # fetch dependencies, create the Python environment, fetch Lean and Mathlib (about 8 GB under .lake/)
 
 workshop run -- test     # cargo test (arguments are passed through)
 workshop run -- lint     # rustfmt check, clippy, rustdoc, pure Rust check

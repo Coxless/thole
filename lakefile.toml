@@ -1,0 +1,14 @@
+# Lean proofs for the thole crates. Each crate keeps its proofs next to its
+# Rust code, in `crates/<crate>/lean/`, as one library of this package.
+name = "thole"
+defaultTargets = ["TholeRoots"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.34.1"
+
+[[lean_lib]]
+name = "TholeRoots"
+srcDir = "crates/thole-roots/lean"
+globs = ["Thole.Roots.+"]

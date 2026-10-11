@@ -12,7 +12,7 @@ base: ubuntu@24.04
 
 sdks:
   - name: rust          # rustup; the version follows rust-toolchain.toml
-  - name: uv            # builds and tests the Python bindings (bindings/python)
+  - name: uv            # builds the Python bindings (bindings/python) and runs the Python tests
   - name: project-elan  # in-project SDK in .workshop/elan/ (the Store has no Lean SDK)
 
 # Named scripts, run with `workshop run -- <action> [args...]`.
@@ -22,7 +22,7 @@ actions:
     cd /project
     cargo fetch
     (cd bindings/python && uv sync)
-    (cd lean && lake build)
+    lake build
 
   # Rust tests. thole-py is not included (see default-members).
   test: |
@@ -48,9 +48,9 @@ actions:
 
   # Check the Lean proofs. Fails if any sorry is left.
   lean: |
-    cd /project/lean
+    cd /project
     lake build "$@"
-    ! grep -rnw --include='*.lean' --exclude-dir=.lake sorry .
+    ! grep -rnw --include='*.lean' sorry crates
 
   # Everything CI runs.
   check: |
@@ -62,4 +62,5 @@ actions:
     RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
     scripts/check-pure-rust.sh
     (cd bindings/python && uv sync --reinstall-package thole && uv run pytest)
-    (cd lean && lake build && ! grep -rnw --include='*.lean' --exclude-dir=.lake sorry .)
+    lake build
+    ! grep -rnw --include='*.lean' sorry crates

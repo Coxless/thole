@@ -6,6 +6,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+# Proofs and Python tests live next to the code but are not part of the crate.
+exclude = ["lean/", "python/"]
 
 [dependencies]
 thole-core.workspace = true

@@ -1,4 +1,4 @@
-# Installs elan into ~/.elan, without a Lean toolchain (fetched on first use from lean/lean-toolchain).
+# Installs elan into ~/.elan, without a Lean toolchain (fetched on first use from lean-toolchain).
 if [ ! -x ~/.elan/bin/elan ]; then
   elan-init -y --default-toolchain none --no-modify-path
 fi

@@ -63,13 +63,17 @@ An area is "finished" when all four of these exist:
 
 - Every public Rust function and type has a corresponding Python API. No public feature exists in Rust only.
 - The bindings live in a single crate, `bindings/python` (PyO3 + maturin), distributed as the Python package `thole`.
+- The Python tests of an area, and the scripts that generate its reference values, live next to the Rust code in `crates/<crate>/python/`.
 - The bindings are a thin conversion layer. They contain no computational logic.
 - The Python API follows Python conventions (exceptions, keyword arguments). API compatibility with SciPy or NumPy is not a goal (section 4).
 
 ### 3.5 Mathematical rigor through Lean
 
-- For each algorithm, the mathematical properties it relies on (convergence, error bounds, order, existence and uniqueness of a factorization, and so on) are formalized and proved in Lean 4. The proofs live in `lean/`.
+- For each algorithm, the mathematical properties it relies on (convergence, error bounds, order, existence and uniqueness of a factorization, and so on) are formalized and proved in Lean 4. The proofs are checked by `lake build`.
 - The Rust documentation names the corresponding theorem, and the Lean side names the corresponding Rust function.
+- The proofs of a crate live next to its Rust code, in `crates/<crate>/lean/`. An algorithm is defined as a function on the real numbers, written to follow the structure of the Rust code step by step, and the theorems are stated about that definition.
+- The proofs build on Mathlib. Its release tag in `lakefile.toml` and the Lean version in `lean-toolchain` are upgraded together.
+- Mathlib is a dependency of the proofs only. It does not affect the Rust crates or 3.2.
 
 Be clear about what Lean does and does not guarantee.
 
@@ -92,28 +96,35 @@ The part that is not guaranteed is covered by reference-value tests and hard-inp
 
 ## 5. Layout
 
-Everything is in one repository, split into several crates with a Cargo workspace.
+Everything is in one repository, split into several crates with a Cargo workspace. The unit of organization is the area: one directory per area holds its Rust code, its Lean proofs and its Python tests side by side.
 
 ```
 thole/
-├── Cargo.toml            # [workspace]
+├── Cargo.toml            # Cargo workspace
+├── lakefile.toml         # Lake package: one Lean library per crate
 ├── CONCEPT.md
 ├── crates/
 │   ├── thole-core/       # shared parts: scalar traits, error types, tolerances
 │   ├── thole-roots/      # root finding
+│   │   ├── src/          #   Rust implementation
+│   │   ├── lean/         #   Lean proofs (module namespace Thole.Roots)
+│   │   └── python/       #   Python tests and reference-value generators
 │   ├── thole-quad/       # numerical integration
 │   ├── thole-linalg/     # matrix types, LU decomposition and so on
 │   ├── thole-ode/        # ordinary differential equations
 │   └── thole/            # facade that re-exports the other crates
 ├── bindings/
 │   └── python/           # thole-py: the Python package `thole`, built with PyO3
-├── lean/                 # Lean 4 proofs (a Lake project)
 ├── scripts/              # checks shared by CI and local development
 └── .workshop/            # development environment definition (section 8)
 ```
 
+Adding an area means adding one directory under `crates/`, one `[[lean_lib]]` entry in `lakefile.toml`, one feature in the facade crate, and one module in the bindings.
+
 - Crate names follow the pattern `thole-<area>`.
 - Users pick the areas they need through feature flags of the facade crate `thole`. Depending on an individual crate directly also works.
+- The Rust side of the bindings stays in the single crate `bindings/python`, with one module per area. Putting PyO3 code into the area crates would break 3.1, and one crate gives one wheel.
+- The `lean/` and `python/` directories are excluded from the packages published to crates.io.
 - `thole-py` is a workspace member but is not in `default-members`. `cargo build` and `cargo test` at the root work without Python.
 - Benchmarks and examples go into each crate's `benches/` and `examples/` when the first algorithm is implemented.
 - The crate split above is an initial proposal. Revisit it as the implementation progresses.
@@ -178,7 +189,7 @@ The development environment is provided by [Canonical Workshop](https://ubuntu.c
 |---|---|---|
 | Rust | `rust` SDK (rustup) | `rust-toolchain.toml` |
 | Python | `uv` SDK | `bindings/python/pyproject.toml` and `uv.lock` |
-| Lean | in-project SDK `.workshop/elan/` (elan) | `lean/lean-toolchain` |
+| Lean | in-project SDK `.workshop/elan/` (elan) | `lean-toolchain` |
 
 The workshop also installs `build-essential`. Rust invokes `cc` as its linker; no C code is compiled. This does not conflict with 3.1.
 
@@ -197,7 +208,6 @@ When one is decided, move it from this section to the section it belongs to.
 | Complex numbers | When to implement them ourselves. Should the scalar traits be designed with complex numbers in mind from the start? |
 | Passing arrays to and from Python | Start with lists only, accept the buffer protocol, or support NumPy (adding the `numpy` crate as a dependency)? To be decided in stage 2. |
 | Cost of calling Python functions | Root finding and integration call a Python function from Rust repeatedly, which is slow. Accepted for now. |
-| Adding Mathlib | Real analysis (continuity, the intermediate value theorem and so on) needs Mathlib. Add it to `lean/lakefile.toml` when the first proof is written. Build time and cache size will grow. |
 | Verifying the Rust code | Use a tool such as Aeneas that translates Rust to Lean? Decide after checking how well it handles floating point and closures. |
 | Floating-point error | Treat rounding error bounds in Lean, or cover them with tests only? |
 | GitHub repository name | The user name `thole` is already taken, so it cannot be used as an organization name. Use another name such as `thole-rs`, or keep the repository under a personal account. |

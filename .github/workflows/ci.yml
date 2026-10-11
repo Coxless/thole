@@ -40,7 +40,5 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: leanprover/lean-action@v1
-        with:
-          lake-package-directory: lean
       - name: No sorry
-        run: "! grep -rnw --include='*.lean' sorry lean --exclude-dir=.lake"
+        run: "! grep -rnw --include='*.lean' sorry crates"
