@@ -61,7 +61,7 @@ workshop refresh                # after changing base / sdks / hooks under .work
 
 Work happens on `develop`. `main` is protected: changes reach it through a pull request, and the `ci` check must pass.
 
-CI runs on every push to `develop` and on every pull request. It runs only the jobs whose files have changed (Rust, Python, Lean), and all of them call `scripts/check.sh`, the same script as `workshop run -- check`.
+CI runs on pull requests only: once when one is opened, and once for every push to its branch after that. A push to `develop` with no open pull request is not checked, so open the pull request early (as a draft if it is not ready) or run `workshop run -- check`. It runs only the jobs whose files have changed (Rust, Python, Lean), and all of them call `scripts/check.sh`, the same script as `workshop run -- check`.
 
 ### Releasing
 

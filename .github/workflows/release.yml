@@ -32,6 +32,11 @@ jobs:
 
   # All checks, regardless of which files changed.
   ci:
+    # A called workflow cannot ask for more than its caller grants, and the
+    # `changes` job of ci.yml asks for these. Without them the run fails to start.
+    permissions:
+      contents: read
+      pull-requests: read
     uses: ./.github/workflows/ci.yml
 
   wheels:
