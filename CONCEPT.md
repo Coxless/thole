@@ -96,7 +96,7 @@ The part that is not guaranteed is covered by reference-value tests and hard-inp
 
 ## 5. Layout
 
-Everything is in one repository, split into several crates with a Cargo workspace. The unit of organization is the area: one directory per area holds its Rust code, its Lean proofs and its Python tests side by side.
+Everything is in one repository, split into several crates with a Cargo workspace. The unit of organization is the area: one directory per area holds its Rust code, its Lean proofs, its Python tests and its notebooks side by side.
 
 ```
 thole/
@@ -108,7 +108,8 @@ thole/
 │   ├── thole-roots/      # root finding
 │   │   ├── src/          #   Rust implementation
 │   │   ├── lean/         #   Lean proofs (module namespace Thole.Roots)
-│   │   └── python/       #   Python tests and reference-value generators
+│   │   ├── python/       #   Python tests and reference-value generators
+│   │   └── notebooks/    #   Jupyter notebooks that exercise the area by hand
 │   ├── thole-quad/       # numerical integration
 │   ├── thole-linalg/     # matrix types, LU decomposition and so on
 │   ├── thole-ode/        # ordinary differential equations
@@ -124,7 +125,7 @@ Adding an area means adding one directory under `crates/`, one `[[lean_lib]]` en
 - Crate names follow the pattern `thole-<area>`.
 - Users pick the areas they need through feature flags of the facade crate `thole`. Depending on an individual crate directly also works.
 - The Rust side of the bindings stays in the single crate `bindings/python`, with one module per area. Putting PyO3 code into the area crates would break 3.1, and one crate gives one wheel.
-- The `lean/` and `python/` directories are excluded from the packages published to crates.io.
+- The `lean/`, `python/` and `notebooks/` directories are excluded from the packages published to crates.io.
 - Every crate and the Python package are licensed under MIT OR Apache-2.0, the Rust convention.
 - `thole-py` is a workspace member but is not in `default-members`. `cargo build` and `cargo test` at the root work without Python.
 - Benchmarks and examples go into each crate's `benches/` and `examples/` when the first algorithm is implemented.

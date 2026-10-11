@@ -32,7 +32,7 @@ assert abs(root.x - 2**0.5) < 1e-11
 | `crates/thole-ode` | Ordinary differential equations |
 | `bindings/python` | The Python package `thole` (PyO3 + maturin) |
 
-Each area keeps its Lean proofs in `crates/<crate>/lean/` and its Python tests in `crates/<crate>/python/`, next to the Rust code in `src/`.
+Each area keeps its Lean proofs in `crates/<crate>/lean/`, its Python tests in `crates/<crate>/python/` and its notebooks in `crates/<crate>/notebooks/`, next to the Rust code in `src/`.
 
 | Area | Algorithm | Lean proofs |
 |---|---|---|
@@ -51,11 +51,20 @@ workshop run -- test     # cargo test (arguments are passed through)
 workshop run -- fmt      # cargo fmt
 workshop run -- check    # everything CI runs
 workshop run -- check rust     # or: python, lean, package
+workshop run -- notebook # JupyterLab with Python and Rust kernels
 
 workshop exec -- cargo <args>   # one-off command
 workshop shell                  # open a shell inside
 workshop refresh                # after changing base / sdks / hooks under .workshop/
 ```
+
+### Notebooks
+
+The notebooks in `crates/<crate>/notebooks/` exercise an algorithm by hand, from Python and from Rust: reference values, the quantities the Lean theorems predict, failures and edge cases. They complement the tests and are not run by CI.
+
+`workshop run -- notebook` starts JupyterLab inside the workshop and prints the URL to open from the host. The Python kernel uses `thole` rebuilt from the working tree; the Rust kernel ([evcxr](https://github.com/evcxr/evcxr)) is installed the first time, which takes a few minutes. After changing the Rust code, restart the action for the Python kernel, or run the `:dep` cell again in a Rust notebook.
+
+Notebooks are committed without outputs: clear them before committing (Edit > Clear Outputs of All Cells).
 
 ### Branches and CI
 

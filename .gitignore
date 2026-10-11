@@ -10,6 +10,7 @@ __pycache__/
 *.pyd
 /bindings/python/dist/
 .pytest_cache/
+.ipynb_checkpoints/
 
 # Lean
 /.lake/
