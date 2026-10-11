@@ -24,43 +24,21 @@ actions:
     (cd bindings/python && uv sync)
     lake build
 
-  # Rust tests. thole-py is not included (see default-members).
+  # The checks themselves are defined in scripts/check.sh, which CI runs too.
+
+  # Run tests while developing. Arguments go to cargo test,
+  # e.g. `workshop run -- test -p thole-roots bisect`.
   test: |
     cd /project
     cargo test --all-features "$@"
-
-  lint: |
-    cd /project
-    cargo fmt --all --check
-    cargo clippy --workspace --all-targets --all-features "$@" -- -D warnings
-    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
-    scripts/check-pure-rust.sh
 
   fmt: |
     cd /project
     cargo fmt --all "$@"
 
-  # Rebuild the Python bindings and run pytest.
-  py: |
-    cd /project/bindings/python
-    uv sync --reinstall-package thole
-    uv run pytest "$@"
-
-  # Check the Lean proofs. Fails if any sorry is left.
-  lean: |
-    cd /project
-    lake build "$@"
-    ! grep -rnw --include='*.lean' sorry crates
-
-  # Everything CI runs.
+  # Run checks: `workshop run -- check rust`, `check python`, `check lean`,
+  # `check package`, or several at once. Without arguments, runs everything CI can run.
   check: |
     cd /project
-    cargo fmt --all --check
-    cargo clippy --workspace --all-targets --all-features -- -D warnings
-    cargo test --all-features
-    cargo test --no-default-features
-    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
-    scripts/check-pure-rust.sh
-    (cd bindings/python && uv sync --reinstall-package thole && uv run pytest)
-    lake build
-    ! grep -rnw --include='*.lean' sorry crates
+    if [ $# -eq 0 ]; then set -- all; fi
+    scripts/check.sh "$@"

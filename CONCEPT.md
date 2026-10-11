@@ -184,6 +184,7 @@ Cholesky decomposition, QR decomposition, eigenvalues, SVD, interpolation, speci
 
 - **Reference-value tests**: every algorithm has tests that compare against an analytic solution or against values produced by a trusted implementation (SciPy, LAPACK and so on). How the reference values were generated is recorded too.
 - **Hard-input tests**: include ill-conditioned matrices, nearly singular problems, problems that do not converge, and the like.
+- **One definition of the checks**: `scripts/check.sh` is run both by CI and by `workshop run -- check`. CI runs only the checks whose files have changed.
 - **Pure Rust check**: CI verifies that no `-sys` crate is in the dependency tree of the computational crates (`scripts/check-pure-rust.sh`).
 - **Python tests**: every Python API has pytest tests. They use the same reference values as the Rust side.
 - **Lean check**: `lake build` must pass in CI. Nothing containing `sorry` is merged into main.
