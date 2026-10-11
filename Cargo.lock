@@ -120,7 +120,7 @@ checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
 
 [[package]]
 name = "thole"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "thole-core",
  "thole-linalg",
@@ -131,25 +131,25 @@ dependencies = [
 
 [[package]]
 name = "thole-core"
-version = "0.0.0"
+version = "0.1.0"
 
 [[package]]
 name = "thole-linalg"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "thole-core",
 ]
 
 [[package]]
 name = "thole-ode"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "thole-core",
 ]
 
 [[package]]
 name = "thole-py"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "pyo3",
  "thole",
@@ -157,14 +157,14 @@ dependencies = [
 
 [[package]]
 name = "thole-quad"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "thole-core",
 ]
 
 [[package]]
 name = "thole-roots"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "thole-core",
 ]
