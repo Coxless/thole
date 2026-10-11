@@ -1,8 +1,8 @@
 name: CI
 
-# Pull requests only. A push to `develop` with an open pull request would
+# Pull requests only. A push to a branch with an open pull request would
 # otherwise run everything twice, and a push to `main` is always the merge of a
-# pull request that has just passed.
+# pull request that has just passed while up to date with `main`.
 on:
   pull_request:
   # Called by the release workflow, which runs every job.
