@@ -36,6 +36,22 @@ actions:
     cd /project
     cargo fmt --all "$@"
 
+  # Start JupyterLab on the notebooks in crates/<crate>/notebooks/, with a Python
+  # kernel that has `thole` rebuilt from the working tree and a Rust kernel
+  # (evcxr), which is installed on first use. Arguments go to `jupyter lab`.
+  # Open the printed URL from the host; stop with Ctrl-C.
+  notebook: |
+    kernel="$HOME/.cargo/bin/evcxr_jupyter"
+    if [ ! -x "$kernel" ]; then
+      cargo install --locked evcxr_jupyter
+    fi
+    "$kernel" --install
+    cd /project/bindings/python
+    echo "From the host, replace 127.0.0.1 in the URL below with $(hostname -I | cut -d' ' -f1)"
+    uv run --reinstall-package thole \
+      --with jupyterlab --with scipy --with mpmath --with matplotlib \
+      jupyter lab --ip=0.0.0.0 --no-browser --notebook-dir=/project/crates "$@"
+
   # Run checks: `workshop run -- check rust`, `check python`, `check lean`,
   # `check package`, or several at once. Without arguments, runs everything CI can run.
   check: |
