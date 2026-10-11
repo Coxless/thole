@@ -48,16 +48,29 @@ workshop start           # resume it if it is stopped
 workshop run -- setup    # fetch dependencies, create the Python environment, fetch Lean and Mathlib (about 8 GB under .lake/)
 
 workshop run -- test     # cargo test (arguments are passed through)
-workshop run -- lint     # rustfmt check, clippy, rustdoc, pure Rust check
 workshop run -- fmt      # cargo fmt
-workshop run -- py       # rebuild the Python bindings and run pytest
-workshop run -- lean     # lake build and the sorry check
 workshop run -- check    # everything CI runs
+workshop run -- check rust     # or: python, lean, package
 
 workshop exec -- cargo <args>   # one-off command
 workshop shell                  # open a shell inside
 workshop refresh                # after changing base / sdks / hooks under .workshop/
 ```
+
+### Branches and CI
+
+Work happens on `develop`. `main` is protected: changes reach it through a pull request, and the `ci` check must pass.
+
+CI runs on every push to `develop` and on every pull request. It runs only the jobs whose files have changed (Rust, Python, Lean), and all of them call `scripts/check.sh`, the same script as `workshop run -- check`.
+
+### Releasing
+
+The crates and the Python package share one version, set in the root `Cargo.toml` (`workspace.package.version` and the `workspace.dependencies` entries).
+
+1. On `develop`, bump the version and merge into `main`.
+2. Tag the merge commit `v<version>` and push the tag.
+
+The `Release` workflow then runs every check, builds the Linux wheels (x86_64 and aarch64) and the sdist, publishes the crates to crates.io and the package to PyPI, and creates a GitHub release. Running the workflow by hand from the Actions tab does everything except the uploads.
 
 ## License
 
