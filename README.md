@@ -59,16 +59,22 @@ workshop refresh                # after changing base / sdks / hooks under .work
 
 ### Branches and CI
 
-Work happens on `develop`. `main` is protected: changes reach it through a pull request, and the `ci` check must pass.
+The repository follows [GitHub flow](https://docs.github.com/en/get-started/using-github/github-flow). `main` is the only long-lived branch and is always releasable.
 
-CI runs on pull requests only: once when one is opened, and once for every push to its branch after that. A push to `develop` with no open pull request is not checked, so open the pull request early (as a draft if it is not ready) or run `workshop run -- check`. It runs only the jobs whose files have changed (Rust, Python, Lean), and all of them call `scripts/check.sh`, the same script as `workshop run -- check`.
+1. Create a short-lived branch from the latest `main`, one per change.
+2. Push it and open a pull request against `main`, as a draft if it is not ready.
+3. Merge once the `ci` check passes. The branch is deleted on merge.
+
+`main` is protected: changes reach it only through a pull request, the `ci` check must pass, and the branch must be up to date with `main` before it is merged.
+
+CI runs on pull requests only: once when one is opened, and once for every push to its branch after that. A branch with no open pull request is not checked, so open the pull request early or run `workshop run -- check`. It runs only the jobs whose files have changed (Rust, Python, Lean), and all of them call `scripts/check.sh`, the same script as `workshop run -- check`.
 
 ### Releasing
 
 The crates and the Python package share one version, set in the root `Cargo.toml` (`workspace.package.version` and the `workspace.dependencies` entries).
 
-1. On `develop`, bump the version and merge into `main`.
-2. Tag the merge commit `v<version>` and push the tag.
+1. Bump the version on a branch and merge it into `main` through a pull request, like any other change.
+2. Tag the resulting commit on `main` `v<version>` and push the tag.
 
 The `Release` workflow then runs every check, builds the Linux wheels (x86_64 and aarch64) and the sdist, publishes the crates to crates.io and the package to PyPI, and creates a GitHub release. Running the workflow by hand from the Actions tab does everything except the uploads.
 
