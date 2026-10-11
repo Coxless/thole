@@ -1,0 +1,24 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "bindings/python"]
+# thole-py links against libpython, so it is built only on request
+# (`cargo build -p thole-py` or maturin). See CONCEPT.md section 5.
+default-members = ["crates/*"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Coxless/thole"
+authors = ["Coxless"]
+
+[workspace.dependencies]
+thole-core = { version = "0.0.0", path = "crates/thole-core" }
+thole-roots = { version = "0.0.0", path = "crates/thole-roots" }
+thole-quad = { version = "0.0.0", path = "crates/thole-quad" }
+thole-linalg = { version = "0.0.0", path = "crates/thole-linalg" }
+thole-ode = { version = "0.0.0", path = "crates/thole-ode" }
+thole = { version = "0.0.0", path = "crates/thole" }
+
+[workspace.lints.rust]
+missing_docs = "warn"

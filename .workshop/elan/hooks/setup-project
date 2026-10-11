@@ -1,0 +1,10 @@
+# Installs elan into ~/.elan, without a Lean toolchain (fetched on first use from lean/lean-toolchain).
+if [ ! -x ~/.elan/bin/elan ]; then
+  elan-init -y --default-toolchain none --no-modify-path
+fi
+if ! grep -q '.elan/bin' ~/.profile; then
+  cat <<'PROFILE' >> ~/.profile
+
+export PATH="$HOME/.elan/bin:$PATH"
+PROFILE
+fi

@@ -1,0 +1,8 @@
+# In-project SDK: installs elan, the Lean 4 toolchain manager, into the workshop.
+# The Store has no Lean SDK, so hooks/setup-base unpacks the official release.
+# The Lean version itself follows lean/lean-toolchain and is fetched by the first `lake build`.
+name: elan
+summary: Lean 4 toolchain manager
+description: |
+  Installs a pinned elan release into /usr/local/bin of the workshop, plus the
+  C toolchain that rustc needs as a linker.

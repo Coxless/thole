@@ -1,0 +1,15 @@
+# Workshop: the lock file must not be committed (the definitions in .workshop/ are)
+.workshop.lock
+
+/target/
+
+# Python
+.venv/
+__pycache__/
+*.so
+*.pyd
+/bindings/python/dist/
+.pytest_cache/
+
+# Lean
+/lean/.lake/

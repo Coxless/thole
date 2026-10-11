@@ -1,0 +1,24 @@
+# Runs as root. Installs the official elan release into /usr/local/bin.
+# To upgrade, change ELAN_VERSION and run `workshop refresh`.
+set -eu
+
+ELAN_VERSION="${ELAN_VERSION:-4.2.4}"
+
+case "$(uname -m)" in
+  x86_64)  ELAN_ARCH=x86_64 ;;
+  aarch64) ELAN_ARCH=aarch64 ;;
+  *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+esac
+
+apt-get update
+# git: lake fetches dependencies with it. build-essential: rustc invokes cc as its linker (no C code is compiled).
+eatmydata apt-get install -y curl ca-certificates git build-essential
+
+if [ ! -x /usr/local/bin/elan-init ] || ! /usr/local/bin/elan-init --version | grep -q "$ELAN_VERSION"; then
+  tmp=$(mktemp -d)
+  curl -fsSL -o "$tmp/elan.tar.gz" \
+    "https://github.com/leanprover/elan/releases/download/v${ELAN_VERSION}/elan-${ELAN_ARCH}-unknown-linux-gnu.tar.gz"
+  tar -xf "$tmp/elan.tar.gz" -C "$tmp"
+  install -m 0755 "$tmp/elan-init" /usr/local/bin/elan-init
+  rm -rf "$tmp"
+fi

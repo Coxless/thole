@@ -1,0 +1,5 @@
+name = "thole"
+defaultTargets = ["Thole"]
+
+[[lean_lib]]
+name = "Thole"

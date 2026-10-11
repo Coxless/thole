@@ -1,0 +1,26 @@
+[package]
+name = "thole"
+description = "Pure Rust, no C/Fortran: scientific computing with every algorithm implemented from scratch."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+readme = "../../README.md"
+
+[features]
+default = ["roots", "quad", "linalg", "ode"]
+roots = ["dep:thole-roots"]
+quad = ["dep:thole-quad"]
+linalg = ["dep:thole-linalg"]
+ode = ["dep:thole-ode"]
+
+[dependencies]
+thole-core.workspace = true
+thole-roots = { workspace = true, optional = true }
+thole-quad = { workspace = true, optional = true }
+thole-linalg = { workspace = true, optional = true }
+thole-ode = { workspace = true, optional = true }
+
+[lints]
+workspace = true

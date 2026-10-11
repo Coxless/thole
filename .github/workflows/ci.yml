@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --all-features
+      - run: cargo test --locked --all-features
+      - run: cargo test --no-default-features
+      - run: cargo doc --no-deps --all-features
+      - name: Pure Rust check
+        run: scripts/check-pure-rust.sh
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+      - run: rustup show
+      - run: uv sync --locked
+        working-directory: bindings/python
+      - run: uv run pytest
+        working-directory: bindings/python
+
+  lean:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: lean
+      - name: No sorry
+        run: "! grep -rnw --include='*.lean' sorry lean --exclude-dir=.lake"

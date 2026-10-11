@@ -1,0 +1,65 @@
+# Workshop definition (thole)
+# Reference: https://ubuntu.com/workshop/docs/reference/definition-files/workshop-definition/
+#
+# - `name` must match the file name (.workshop/<name>.yaml)
+# - after changing `base` or `sdks`, apply with `workshop refresh`
+# - changes to `actions` take effect immediately, no refresh needed
+#
+# Rust, Python and Lean exist only inside the workshop. Nothing is installed on the host.
+
+name: dev
+base: ubuntu@24.04
+
+sdks:
+  - name: rust          # rustup; the version follows rust-toolchain.toml
+  - name: uv            # builds and tests the Python bindings (bindings/python)
+  - name: project-elan  # in-project SDK in .workshop/elan/ (the Store has no Lean SDK)
+
+# Named scripts, run with `workshop run -- <action> [args...]`.
+# They run under bash (errexit + pipefail). The project is mounted at /project.
+actions:
+  setup: |
+    cd /project
+    cargo fetch
+    (cd bindings/python && uv sync)
+    (cd lean && lake build)
+
+  # Rust tests. thole-py is not included (see default-members).
+  test: |
+    cd /project
+    cargo test --all-features "$@"
+
+  lint: |
+    cd /project
+    cargo fmt --all --check
+    cargo clippy --workspace --all-targets --all-features "$@" -- -D warnings
+    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
+    scripts/check-pure-rust.sh
+
+  fmt: |
+    cd /project
+    cargo fmt --all "$@"
+
+  # Rebuild the Python bindings and run pytest.
+  py: |
+    cd /project/bindings/python
+    uv sync --reinstall-package thole
+    uv run pytest "$@"
+
+  # Check the Lean proofs. Fails if any sorry is left.
+  lean: |
+    cd /project/lean
+    lake build "$@"
+    ! grep -rnw --include='*.lean' --exclude-dir=.lake sorry .
+
+  # Everything CI runs.
+  check: |
+    cd /project
+    cargo fmt --all --check
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+    cargo test --all-features
+    cargo test --no-default-features
+    RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
+    scripts/check-pure-rust.sh
+    (cd bindings/python && uv sync --reinstall-package thole && uv run pytest)
+    (cd lean && lake build && ! grep -rnw --include='*.lean' --exclude-dir=.lake sorry .)

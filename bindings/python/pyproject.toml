@@ -1,0 +1,21 @@
+[build-system]
+requires = ["maturin>=1.15,<2"]
+build-backend = "maturin"
+
+[project]
+name = "thole"
+description = "Pure Rust, no C/Fortran: scientific computing with every algorithm implemented from scratch."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT OR Apache-2.0"
+dynamic = ["version"]
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "thole._thole"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
