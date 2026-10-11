@@ -2,7 +2,7 @@
 
 A family of scientific computing crates written in pure Rust.
 
-- Status: concept stage (created 2026-10-11)
+- Status: early development (created 2026-10-11)
 - Role of this document: the reference to return to when a design or implementation question has no obvious answer. When a decision changes, update this document first.
 
 ## 1. Name
@@ -147,6 +147,15 @@ No matrix type is needed, so work can start right away. This stage settles the f
 - The granularity of the Lean formalization (what is stated as a theorem, and how it maps to the Rust code)
 
 The shared parts that come out of this go into `thole-core`.
+
+Decided with bisection, the first algorithm:
+
+- **Functions**: taken as `impl FnMut(f64) -> f64`. The scalar type is fixed to `f64` until the scalar traits of stage 2 exist.
+- **Tolerances**: `thole_core::Tolerance` has an absolute and a relative part; an error is accepted when it is at most `abs + rel * |x|`. It has no default. Each area has an `Options` struct (tolerance, iteration limit) that implements `Default`, passed by reference as the last argument.
+- **Failures**: every fallible function returns `Result`. Each area has one `#[non_exhaustive]` `Error` enum whose variants carry the values needed to understand the failure. Invalid input is an error, never a panic. A NaN returned by the user's function is an error.
+- **Python**: one submodule per area (`thole.roots`). Options become keyword-only arguments, with `None` meaning the Rust default. Invalid input raises `ValueError`; a failure to converge raises the area's `ConvergenceError`, a `RuntimeError`. An exception raised by the user's function propagates unchanged. Results are read-only objects.
+- **Lean**: the iteration is defined over the real numbers with one definition per step of the Rust loop. The Rust documentation lists the theorems under a `# Proofs` heading, and the Lean file header has a table that maps definitions to Rust code. Where Rust must deviate for floating-point reasons (sign comparison instead of a product, an overflow-free midpoint), the Rust comment says so.
+- **Tests that tie the two together**: where a Lean theorem predicts an exact quantity (the number of steps for a given tolerance, the width of the bracket), a Rust test checks that quantity.
 
 ### Stage 2: core and dense matrix basics
 

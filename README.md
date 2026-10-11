@@ -4,7 +4,21 @@ Pure Rust, no C/Fortran: scientific computing with every algorithm implemented f
 
 A family of scientific computing crates written in pure Rust. It does not rely on external computation engines such as BLAS or LAPACK: every numerical algorithm is implemented from scratch. Everything is callable from Python, and the mathematical properties of the algorithms are proved in Lean 4.
 
-**Status: concept stage.** Nothing is usable yet. The principles and the roadmap are in [CONCEPT.md](CONCEPT.md).
+**Status: early development.** Only bisection is implemented so far. The principles and the roadmap are in [CONCEPT.md](CONCEPT.md).
+
+```rust
+use thole::roots::{Options, bisect};
+
+let root = bisect(|x| x * x - 2.0, 0.0, 2.0, &Options::default())?;
+assert!((root.x - 2.0_f64.sqrt()).abs() < 1e-11);
+```
+
+```python
+from thole.roots import bisect
+
+root = bisect(lambda x: x * x - 2, 0, 2)
+assert abs(root.x - 2**0.5) < 1e-11
+```
 
 ## Layout
 
@@ -22,7 +36,7 @@ Each area keeps its Lean proofs in `crates/<crate>/lean/` and its Python tests i
 
 | Area | Algorithm | Lean proofs |
 |---|---|---|
-| `thole-roots` | Bisection | [`Bisection.lean`](crates/thole-roots/lean/Thole/Roots/Bisection.lean): the bracket always contains a root; error at most `(b - a) / 2 ^ (n + 1)` after `n` steps; convergence. Rust implementation pending. |
+| `thole-roots` | Bisection: `thole::roots::bisect`, `thole.roots.bisect` | [`Bisection.lean`](crates/thole-roots/lean/Thole/Roots/Bisection.lean): the bracket always contains a root; error at most `(b - a) / 2 ^ (n + 1)` after `n` steps; guarantee of the stopping criterion; convergence. |
 
 ## Development
 

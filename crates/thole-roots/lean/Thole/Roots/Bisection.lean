@@ -1,7 +1,17 @@
 /-
 The bisection method for root finding.
 
-Rust counterpart: `thole_roots::bisect` in `../../../src/` (not implemented yet).
+Rust counterpart: `thole_roots::bisect` in `../../../src/bisection.rs`.
+
+| Lean          | Rust                                             |
+|---------------|--------------------------------------------------|
+| `SignChange`  | `sign_change` (sign comparison, not a product)   |
+| `bisectStep`  | the body of the loop in `bisect`                 |
+| `bisect`      | the bracket `(lo, hi)` after `iterations` steps  |
+| `bisectMid`   | the returned `Root::x`                           |
+
+The Rust code stops as soon as half the width of the bracket is within the
+tolerance; `bisectMid_error_of_halfWidth_le` is the guarantee for that test.
 -/
 import Mathlib.Topology.Order.IntermediateValue
 import Mathlib.Topology.Instances.Real.Lemmas
@@ -139,6 +149,18 @@ theorem bisectMid_error (hab : a ≤ b) (hf : ContinuousOn f (Set.Icc a b))
     rw [hw, pow_succ]; ring
   rw [this, bisectMid, abs_le]
   constructor <;> linarith
+
+/-- **Stopping criterion.** If half the width of the bracket after `n` steps
+is at most `δ`, the midpoint is within `δ` of a root of `f` in `[a, b]`. -/
+theorem bisectMid_error_of_halfWidth_le (hab : a ≤ b) (hf : ContinuousOn f (Set.Icc a b))
+    (h : SignChange f a b) (n : ℕ) {δ : ℝ}
+    (hδ : ((bisect f a b n).2 - (bisect f a b n).1) / 2 ≤ δ) :
+    ∃ x ∈ Set.Icc a b, f x = 0 ∧ |bisectMid f a b n - x| ≤ δ := by
+  obtain ⟨x, hx, hfx, hb⟩ := bisectMid_error hab hf h n
+  refine ⟨x, hx, hfx, hb.trans ?_⟩
+  rw [bisect_width] at hδ
+  calc (b - a) / 2 ^ (n + 1) = (b - a) / 2 ^ n / 2 := by rw [pow_succ]; ring
+    _ ≤ δ := hδ
 
 /-- **Convergence.** Any accuracy `ε > 0` is reached after finitely many
 steps: from some step on, the midpoint is within `ε` of a root. -/
