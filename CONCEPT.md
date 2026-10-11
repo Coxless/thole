@@ -125,6 +125,7 @@ Adding an area means adding one directory under `crates/`, one `[[lean_lib]]` en
 - Users pick the areas they need through feature flags of the facade crate `thole`. Depending on an individual crate directly also works.
 - The Rust side of the bindings stays in the single crate `bindings/python`, with one module per area. Putting PyO3 code into the area crates would break 3.1, and one crate gives one wheel.
 - The `lean/` and `python/` directories are excluded from the packages published to crates.io.
+- Every crate and the Python package are licensed under MIT OR Apache-2.0, the Rust convention.
 - `thole-py` is a workspace member but is not in `default-members`. `cargo build` and `cargo test` at the root work without Python.
 - Benchmarks and examples go into each crate's `benches/` and `examples/` when the first algorithm is implemented.
 - The crate split above is an initial proposal. Revisit it as the implementation progresses.
@@ -211,7 +212,6 @@ When one is decided, move it from this section to the section it belongs to.
 |---|---|
 | Allowed dependencies | Standard library only, or allow foundational crates such as `num-traits`? Treating development-only dependencies for tests and benchmarks (`criterion`, `proptest` and so on) as a separate category seems practical. |
 | `unsafe` | Forbid it entirely (`#![forbid(unsafe_code)]`), or allow it only where performance requires it, such as SIMD? |
-| License | MIT OR Apache-2.0, the Rust convention, is in place provisionally. Confirm before publishing. |
 | Supported Rust version (MSRV) | Follow the latest stable, or fix a lower bound? At present `rust-toolchain.toml` just says `stable`. |
 | `no_std` | Support it from the start, or later? |
 | Matrix type design | Sizes in the type or not, how to separate owned data from views, row-major or column-major. To be decided in stage 2. |

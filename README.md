@@ -72,6 +72,8 @@ The crates and the Python package share one version, set in the root `Cargo.toml
 
 The `Release` workflow then runs every check, builds the Linux wheels (x86_64 and aarch64) and the sdist, publishes the crates to crates.io and the package to PyPI, and creates a GitHub release. Running the workflow by hand from the Actions tab does everything except the uploads.
 
+The crates are published by `scripts/publish-crates.sh`, one at a time and dependencies first. It skips a crate whose version is already on crates.io, and when crates.io limits how many new crates may be created in a short time it waits and tries again. A release that adds many crates therefore takes longer but does not fail, and if the job does fail, running it again publishes only what is missing. `scripts/publish-crates.sh --dry-run` lists what would be published.
+
 ## License
 
 Licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
