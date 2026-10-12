@@ -53,7 +53,8 @@ actions:
       jupyter lab --ip=0.0.0.0 --no-browser --notebook-dir=/project/crates "$@"
 
   # Run checks: `workshop run -- check rust`, `check python`, `check lean`,
-  # `check package`, or several at once. Without arguments, runs everything CI can run.
+  # `check oracle`, `check package`, or several at once. Without arguments, runs
+  # everything CI can run.
   check: |
     cd /project
     if [ $# -eq 0 ]; then set -- all; fi

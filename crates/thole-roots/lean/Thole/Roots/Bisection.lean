@@ -1,18 +1,22 @@
 /-
-The bisection method for root finding.
+The bisection method for root finding: the proofs.
 
 Rust counterpart: `thole_roots::bisect` in `../../../src/bisection.rs`.
 
-| Lean          | Rust                                             |
-|---------------|--------------------------------------------------|
-| `SignChange`  | `sign_change` (sign comparison, not a product)   |
-| `bisectStep`  | the body of the loop in `bisect`                 |
-| `bisect`      | the bracket `(lo, hi)` after `iterations` steps  |
-| `bisectMid`   | the returned `Root::x`                           |
+The iteration is defined in `Bisection/Defs.lean`, over any linearly ordered
+field; the table that maps the definitions to the Rust code is there. This
+file proves their properties over the real numbers.
 
 The Rust code stops as soon as half the width of the bracket is within the
-tolerance; `bisectMid_error_of_halfWidth_le` is the guarantee for that test.
+tolerance (`bisectDone`); `bisectMid_error_of_done` is the guarantee for that
+test.
+
+The same definitions run over `ℚ` in the oracle, which checks the results of
+the Rust code against them. What is proved here is about the definitions; that
+the Rust code follows them, and the effect of floating-point rounding, are
+what the oracle tests.
 -/
+import Thole.Roots.Bisection.Defs
 import Mathlib.Topology.Order.IntermediateValue
 import Mathlib.Topology.Instances.Real.Lemmas
 import Mathlib.Tactic.Ring
@@ -20,25 +24,6 @@ import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Positivity
 
 namespace Thole.Roots
-
-/-- `f` takes values of opposite (weak) sign at `a` and `b`.
-
-This is the precondition of bisection. It allows `f a = 0` or `f b = 0`. -/
-def SignChange (f : ℝ → ℝ) (a b : ℝ) : Prop :=
-  f a * f b ≤ 0
-
-/-- One bisection step on the bracket `p = (lo, hi)`: evaluate `f` at the
-midpoint and keep the half on which the sign change is known to persist. -/
-noncomputable def bisectStep (f : ℝ → ℝ) (p : ℝ × ℝ) : ℝ × ℝ :=
-  if f p.1 * f ((p.1 + p.2) / 2) ≤ 0 then (p.1, (p.1 + p.2) / 2) else ((p.1 + p.2) / 2, p.2)
-
-/-- The bracket after `n` bisection steps starting from `(a, b)`. -/
-noncomputable def bisect (f : ℝ → ℝ) (a b : ℝ) (n : ℕ) : ℝ × ℝ :=
-  (bisectStep f)^[n] (a, b)
-
-/-- The approximation returned after `n` steps: the midpoint of the bracket. -/
-noncomputable def bisectMid (f : ℝ → ℝ) (a b : ℝ) (n : ℕ) : ℝ :=
-  ((bisect f a b n).1 + (bisect f a b n).2) / 2
 
 variable {f : ℝ → ℝ} {a b : ℝ}
 
@@ -161,6 +146,14 @@ theorem bisectMid_error_of_halfWidth_le (hab : a ≤ b) (hf : ContinuousOn f (Se
   rw [bisect_width] at hδ
   calc (b - a) / 2 ^ (n + 1) = (b - a) / 2 ^ n / 2 := by rw [pow_succ]; ring
     _ ≤ δ := hδ
+
+/-- **Stopping criterion**, in the form of the test itself: when `bisectDone`
+holds after `n` steps, the midpoint is within the tolerance at the midpoint of
+a root of `f` in `[a, b]`. -/
+theorem bisectMid_error_of_done (hab : a ≤ b) (hf : ContinuousOn f (Set.Icc a b))
+    (h : SignChange f a b) {tol : ℝ → ℝ} {n : ℕ} (hd : bisectDone f tol a b n) :
+    ∃ x ∈ Set.Icc a b, f x = 0 ∧ |bisectMid f a b n - x| ≤ tol (bisectMid f a b n) :=
+  bisectMid_error_of_halfWidth_le hab hf h n hd
 
 /-- **Convergence.** Any accuracy `ε > 0` is reached after finitely many
 steps: from some step on, the midpoint is within `ε` of a root. -/

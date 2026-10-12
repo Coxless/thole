@@ -1,8 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "bindings/python"]
-# thole-py links against libpython, so it is built only on request
-# (`cargo build -p thole-py` or maturin). See CONCEPT.md section 5.
+members = ["crates/*", "bindings/python", "oracle"]
+# thole-py links against libpython, and the tests of thole-oracle need the
+# Lean executable, so both are built only on request (`cargo build -p thole-py`
+# or maturin; `cargo test -p thole-oracle`). See CONCEPT.md section 5.
 default-members = ["crates/*"]
 
 [workspace.package]

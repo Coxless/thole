@@ -41,6 +41,8 @@ Speed can be improved later. Correctness and readability are hard to add afterwa
 
 This principle applies to the computational crates (everything under `crates/`). The Python bindings (`bindings/python`) link against libpython and are exempt. In return, the computational crates must never depend on the bindings.
 
+The Lean oracle (3.5) needs no exemption. It runs as a separate process during the tests; nothing of Lean is linked into any crate, and no published crate depends on it.
+
 ### 3.2 Implement the numerical algorithms ourselves
 
 - Do not delegate computation to other pure Rust crates either (faer, nalgebra, ndarray, rustfft and so on).
@@ -52,12 +54,13 @@ This principle applies to the computational crates (everything under `crates/`).
 - Bring one area to a state where its tests and documentation are complete before moving on to the next.
 - Build foundations such as the matrix type from the features that are actually needed. Do not build ahead of need.
 
-An area is "finished" when all four of these exist:
+An area is "finished" when all five of these exist:
 
 1. The Rust implementation and its reference-value tests
 2. Documentation
 3. Python bindings and their tests (3.4)
-4. Lean proofs of the mathematical properties (3.5). If a property is left unproved, the documentation says why.
+4. Lean definitions of the algorithms and proofs of their mathematical properties (3.5). If a property is left unproved, the documentation says why.
+5. Oracle checks of the Rust results against the Lean definitions (3.5)
 
 ### 3.4 Everything is callable from Python
 
@@ -69,18 +72,38 @@ An area is "finished" when all four of these exist:
 
 ### 3.5 Mathematical rigor through Lean
 
-- For each algorithm, the mathematical properties it relies on (convergence, error bounds, order, existence and uniqueness of a factorization, and so on) are formalized and proved in Lean 4. The proofs are checked by `lake build`.
-- The Rust documentation names the corresponding theorem, and the Lean side names the corresponding Rust function.
-- The proofs of a crate live next to its Rust code, in `crates/<crate>/lean/`. An algorithm is defined as a function on the real numbers, written to follow the structure of the Rust code step by step, and the theorems are stated about that definition.
+The specification and the implementation are written separately, by hand: Lean 4 holds the mathematics, Rust the code that runs. Lean is used in two ways, to prove and to test.
+
+**One definition, two uses.** Each algorithm is defined in Lean over any linearly ordered field, written to follow the structure of the Rust code step by step.
+
+- Over the real numbers, the mathematical properties the algorithm relies on (convergence, error bounds, order, existence and uniqueness of a factorization, and so on) are stated about that definition and proved. The proofs are checked by `lake build`.
+- Over the rational numbers, the same definition runs, with exact arithmetic. It is the executable specification that the results of the Rust code are checked against.
+
+Because the theorems and the checks come from one definition, the specification that is proved and the specification that is tested cannot drift apart.
+
+**The oracle.** The executable `thole-oracle` is built by `lake build` from `oracle/lean/`. A test sends it a problem and what the Rust code returned, and it answers `ok`, `fail`, or `skip` when the check cannot decide. The Rust side is the crate `thole-oracle` in `oracle/`, which draws the problems at random with `proptest`.
+
+- The oracle is a separate process, fed through its standard input. This keeps 3.1 intact and needs no bindings between Lean and Rust.
+- Numbers cross as the bit patterns of `f64` values, which the oracle reads as exact rational numbers. The comparison is made on the Lean side, so the Rust side needs no exact arithmetic.
+- A closure cannot be sent, so the two sides agree on a family of functions that both can evaluate. So far that is polynomials. Functions outside the family (`cos`, `exp`) are covered by the reference-value tests (section 7).
+- Every algorithm gets two checks. Where `f64` arithmetic takes the same decisions as exact arithmetic, the result must be exactly what the definition computes; the oracle works out whether that is the case and skips the call otherwise. For any finite input, the result must have the proved properties up to rounding.
+- The rounding error that a check allows is itself a Lean definition (for example `hornerError`), with its source cited. Nothing is allowed "approximately".
+- The oracle must be shown to tell right from wrong: for each check, tests give it results that are wrong in one respect and require `fail`.
+
+**Conventions.**
+
+- The Rust documentation names the corresponding theorems, and the Lean side names the corresponding Rust function.
+- The Lean code of a crate lives next to its Rust code, in `crates/<crate>/lean/`: the definitions of an algorithm in `<Algorithm>/Defs.lean`, the proofs in `<Algorithm>.lean`. `Defs.lean` imports as little as possible, because everything it imports is linked into the oracle.
 - The proofs build on Mathlib. Its release tag in `lakefile.toml` and the Lean version in `lean-toolchain` are upgraded together.
-- Mathlib is a dependency of the proofs only. It does not affect the Rust crates or 3.2.
+- Mathlib is a dependency of the Lean code only. It does not affect the Rust crates or 3.2.
+- The Rust code is not translated to Lean by a tool (Aeneas or similar). The Rust side is then free to use whatever such a tool would not accept, and the cost is that its agreement with the definitions is tested, not proved.
 
-Be clear about what Lean does and does not guarantee.
+Be clear about what this does and does not guarantee.
 
-- Guaranteed: the mathematical properties of the algorithm as defined over the real numbers.
-- Not guaranteed: that the Rust code matches that definition, and the effect of floating-point rounding.
-
-The part that is not guaranteed is covered by reference-value tests and hard-input tests (section 7). Verifying the Rust code itself in Lean (with Aeneas or a similar tool) is an open question (section 9).
+- Proved: the mathematical properties of the algorithm as defined, over the real numbers.
+- Tested: that the Rust code follows that definition, and that rounding stays within the stated bounds, on the problems that were drawn. No counterexample among them is not a proof.
+- Assumed: the rounding error bounds that the oracle uses. They are taken from the literature, not proved in Lean.
+- Outside the model: NaN, infinities and overflow. The real numbers have none of them, so the oracle is not asked about them. The tests of each crate cover them (section 7).
 
 ### 3.6 English only
 
@@ -101,13 +124,13 @@ Everything is in one repository, split into several crates with a Cargo workspac
 ```
 thole/
 ├── Cargo.toml            # Cargo workspace
-├── lakefile.toml         # Lake package: one Lean library per crate
+├── lakefile.toml         # Lake package: one Lean library per crate, and the oracle
 ├── CONCEPT.md
 ├── crates/
 │   ├── thole-core/       # shared parts: scalar traits, error types, tolerances
 │   ├── thole-roots/      # root finding
 │   │   ├── src/          #   Rust implementation
-│   │   ├── lean/         #   Lean proofs (module namespace Thole.Roots)
+│   │   ├── lean/         #   Lean definitions and proofs (module namespace Thole.Roots)
 │   │   ├── python/       #   Python tests and reference-value generators
 │   │   └── notebooks/    #   Jupyter notebooks that exercise the area by hand
 │   ├── thole-quad/       # numerical integration
@@ -116,18 +139,23 @@ thole/
 │   └── thole/            # facade that re-exports the other crates
 ├── bindings/
 │   └── python/           # thole-py: the Python package `thole`, built with PyO3
+├── oracle/               # thole-oracle: Rust results checked against the Lean definitions
+│   ├── lean/             #   the oracle executable (module namespace Thole.Oracle)
+│   ├── src/              #   Rust side: the connection, and the requests of each area
+│   └── tests/            #   the tests, one file per area
 ├── scripts/              # checks shared by CI and local development
 └── .workshop/            # development environment definition (section 8)
 ```
 
-Adding an area means adding one directory under `crates/`, one `[[lean_lib]]` entry in `lakefile.toml`, one feature in the facade crate, and one module in the bindings.
+Adding an area means adding one directory under `crates/`, one `[[lean_lib]]` entry in `lakefile.toml`, one feature in the facade crate, one module in the bindings, and one module on each side of the oracle.
 
 - Crate names follow the pattern `thole-<area>`.
 - Users pick the areas they need through feature flags of the facade crate `thole`. Depending on an individual crate directly also works.
 - The Rust side of the bindings stays in the single crate `bindings/python`, with one module per area. Putting PyO3 code into the area crates would break 3.1, and one crate gives one wheel.
 - The `lean/`, `python/` and `notebooks/` directories are excluded from the packages published to crates.io.
 - Every crate and the Python package are licensed under MIT OR Apache-2.0, the Rust convention.
-- `thole-py` is a workspace member but is not in `default-members`. `cargo build` and `cargo test` at the root work without Python.
+- `thole-py` and `thole-oracle` are workspace members but are not in `default-members`. `cargo build` and `cargo test` at the root work without Python and without Lean.
+- `thole-oracle` is never published. Like the bindings, it depends on the computational crates and they never depend on it.
 - Benchmarks and examples go into each crate's `benches/` and `examples/` when the first algorithm is implemented.
 - The crate split above is an initial proposal. Revisit it as the implementation progresses.
 
@@ -156,8 +184,8 @@ Decided with bisection, the first algorithm:
 - **Tolerances**: `thole_core::Tolerance` has an absolute and a relative part; an error is accepted when it is at most `abs + rel * |x|`. It has no default. Each area has an `Options` struct (tolerance, iteration limit) that implements `Default`, passed by reference as the last argument.
 - **Failures**: every fallible function returns `Result`. Each area has one `#[non_exhaustive]` `Error` enum whose variants carry the values needed to understand the failure. Invalid input is an error, never a panic. A NaN returned by the user's function is an error.
 - **Python**: one submodule per area (`thole.roots`). Options become keyword-only arguments, with `None` meaning the Rust default. Invalid input raises `ValueError`; a failure to converge raises the area's `ConvergenceError`, a `RuntimeError`. An exception raised by the user's function propagates unchanged. Results are read-only objects.
-- **Lean**: the iteration is defined over the real numbers with one definition per step of the Rust loop. The Rust documentation lists the theorems under a `# Proofs` heading, and the Lean file header has a table that maps definitions to Rust code. Where Rust must deviate for floating-point reasons (sign comparison instead of a product, an overflow-free midpoint), the Rust comment says so.
-- **Tests that tie the two together**: where a Lean theorem predicts an exact quantity (the number of steps for a given tolerance, the width of the bracket), a Rust test checks that quantity.
+- **Lean**: the iteration is defined over any linearly ordered field with one definition per step of the Rust loop, including the stopping test. The Rust documentation lists the theorems under a `# Proofs` heading, and the header of `Defs.lean` has a table that maps definitions to Rust code. Where Rust must deviate for floating-point reasons (sign comparison instead of a product, an overflow-free midpoint), the Rust comment says so.
+- **Tests that tie the two together**: the oracle (3.5). For bisection, `roots.bisect.spec` requires the outcome, the number of steps and the bracket to be exactly those of the Lean definitions, and `roots.bisect.bound` requires the properties of the theorems up to rounding. The functions are polynomials evaluated by Horner's rule, and the sign of a value counts as known only when the value is further from zero than the rounding error bound of that evaluation.
 
 ### Stage 2: core and dense matrix basics
 
@@ -185,11 +213,12 @@ Cholesky decomposition, QR decomposition, eigenvalues, SVD, interpolation, speci
 ## 7. Quality policy
 
 - **Reference-value tests**: every algorithm has tests that compare against an analytic solution or against values produced by a trusted implementation (SciPy, LAPACK and so on). How the reference values were generated is recorded too.
-- **Hard-input tests**: include ill-conditioned matrices, nearly singular problems, problems that do not converge, and the like.
+- **Hard-input tests**: include ill-conditioned matrices, nearly singular problems, problems that do not converge, and the like. Inputs that the real numbers cannot express (NaN, infinities, overflow) are tested here, because the oracle has no say on them.
+- **Oracle tests**: every algorithm is run on problems drawn at random, and its results are checked against the Lean definitions (3.5). A missing oracle executable fails the tests; it never skips them. Inputs that failed once are kept in the repository and tried first from then on.
 - **One definition of the checks**: `scripts/check.sh` is run both by CI and by `workshop run -- check`. CI runs only the checks whose files have changed.
 - **Pure Rust check**: CI verifies that no `-sys` crate is in the dependency tree of the computational crates (`scripts/check-pure-rust.sh`).
 - **Python tests**: every Python API has pytest tests. They use the same reference values as the Rust side.
-- **Lean check**: `lake build` must pass in CI. Nothing containing `sorry` is merged into main.
+- **Lean check**: `lake build` must pass in CI. Nothing containing `sorry` is merged into main. A definition that is meant to run is not marked `noncomputable`.
 - **Documentation**: every public function documents what it computes, the algorithm used, its preconditions, when it fails, and the corresponding Lean theorem.
 - **Benchmarks**: provided to know the speed gap to existing libraries. Winning is not the goal.
 
@@ -211,7 +240,7 @@ When one is decided, move it from this section to the section it belongs to.
 
 | Item | Options and notes |
 |---|---|
-| Allowed dependencies | Standard library only, or allow foundational crates such as `num-traits`? Treating development-only dependencies for tests and benchmarks (`criterion`, `proptest` and so on) as a separate category seems practical. |
+| Allowed dependencies | For the computational crates: standard library only, or allow foundational crates such as `num-traits`? Development-only dependencies are a separate category: `proptest` is used by `thole-oracle` (3.5). Whether the computational crates may have development-only dependencies of their own (`criterion` and so on) is still open. |
 | `unsafe` | Forbid it entirely (`#![forbid(unsafe_code)]`), or allow it only where performance requires it, such as SIMD? |
 | Supported Rust version (MSRV) | Follow the latest stable, or fix a lower bound? At present `rust-toolchain.toml` just says `stable`. |
 | `no_std` | Support it from the start, or later? |
@@ -219,8 +248,8 @@ When one is decided, move it from this section to the section it belongs to.
 | Complex numbers | When to implement them ourselves. Should the scalar traits be designed with complex numbers in mind from the start? |
 | Passing arrays to and from Python | Start with lists only, accept the buffer protocol, or support NumPy (adding the `numpy` crate as a dependency)? To be decided in stage 2. |
 | Cost of calling Python functions | Root finding and integration call a Python function from Rust repeatedly, which is slow. Accepted for now. |
-| Verifying the Rust code | Use a tool such as Aeneas that translates Rust to Lean? Decide after checking how well it handles floating point and closures. |
-| Floating-point error | Treat rounding error bounds in Lean, or cover them with tests only? |
+| Proving the rounding error bounds | The oracle states its rounding error bounds in Lean but takes them from the literature (3.5). Prove them from a model of floating-point arithmetic in Lean? |
+| Functions the oracle can evaluate | Polynomials only so far. Rational functions come for free. Transcendental functions would need interval arithmetic on the Lean side. |
 | GitHub repository name | The user name `thole` is already taken, so it cannot be used as an organization name. Use another name such as `thole-rs`, or keep the repository under a personal account. |
 | Reserving names on crates.io and PyPI | `thole` was unregistered on both as of 2026-10-11. Reserve it early. |
 

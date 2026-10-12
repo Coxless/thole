@@ -2,7 +2,7 @@
 # The checks of the project, shared by CI (.github/workflows/ci.yml) and the
 # workshop actions (.workshop/dev.yaml). Change them here, nowhere else.
 #
-# Usage: scripts/check.sh <rust|python|lean|package|all>...
+# Usage: scripts/check.sh <rust|python|lean|oracle|package|all>...
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -24,10 +24,17 @@ check_python() {
 
 check_lean() {
     lake build
-    if grep -rnw --include='*.lean' sorry crates; then
+    if grep -rnw --include='*.lean' sorry crates oracle; then
         echo "error: sorry found in the Lean proofs" >&2
         return 1
     fi
+}
+
+# Checks the results of the Rust code against the Lean definitions. Needs both
+# toolchains: Lean builds the oracle executable, and the Rust tests run it.
+check_oracle() {
+    lake build thole-oracle
+    cargo test -p thole-oracle --locked
 }
 
 # Verifies that the crates can be packaged for crates.io. Nothing is uploaded.
@@ -36,13 +43,13 @@ check_package() {
 }
 
 if [[ $# -eq 0 ]]; then
-    echo "usage: $0 <rust|python|lean|package|all>..." >&2
+    echo "usage: $0 <rust|python|lean|oracle|package|all>..." >&2
     exit 2
 fi
 for target in "$@"; do
     case "$target" in
-        rust | python | lean | package) (check_"$target") ;;
-        all) for t in rust python lean package; do (check_"$t"); done ;;
+        rust | python | lean | oracle | package) (check_"$target") ;;
+        all) for t in rust python lean oracle package; do (check_"$t"); done ;;
         *)
             echo "unknown check: $target" >&2
             exit 2

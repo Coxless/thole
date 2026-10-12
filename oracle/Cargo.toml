@@ -1,0 +1,21 @@
+[package]
+name = "thole-oracle"
+description = "Tests of the thole crates against the Lean oracle."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+# Development only: the tests need the `thole-oracle` executable that
+# `lake build` produces. See CONCEPT.md section 3.5.
+publish = false
+
+[dependencies]
+thole-roots.workspace = true
+
+[dev-dependencies]
+proptest = { version = "1", default-features = false, features = ["std"] }
+thole-core.workspace = true
+
+[lints]
+workspace = true

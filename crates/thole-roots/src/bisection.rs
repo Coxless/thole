@@ -51,15 +51,20 @@ pub struct Root {
 ///
 /// # Proofs
 ///
-/// `lean/Thole/Roots/Bisection.lean` defines the same iteration over the real
-/// numbers (`bisectStep`, `bisect`, `bisectMid`) and proves:
+/// `lean/Thole/Roots/Bisection/Defs.lean` defines the same iteration over
+/// any ordered field (`bisectStep`, `bisect`, `bisectMid`, `bisectDone`), and
+/// `lean/Thole/Roots/Bisection.lean` proves, over the real numbers:
 ///
 /// - `bisect_exists_root`: every bracket contains a root.
-/// - `bisectMid_error_of_halfWidth_le`: the guarantee above.
+/// - `bisectMid_error_of_done`: the guarantee above.
 /// - `bisectMid_error`: after `n` steps the error is at most
 ///   `(b - a) / 2 ^ (n + 1)`, which bounds the number of steps needed.
 ///
-/// The proofs do not cover floating-point rounding.
+/// The proofs are about the Lean definitions, and do not cover
+/// floating-point rounding. That this function follows the definitions is
+/// tested: the oracle (`oracle/` in the repository) runs them with exact
+/// rational arithmetic and checks the results of this function against them,
+/// on polynomials drawn at random.
 ///
 /// # Examples
 ///
@@ -138,7 +143,7 @@ pub fn bisect(
 /// Whether `u` and `v` have opposite signs or one of them is zero.
 ///
 /// Over the real numbers this is `u * v <= 0`, the form used in the Lean
-/// definition `SignChange`. The product is avoided here because it can
+/// definition `SignChange`, which the oracle evaluates exactly. The product is avoided here because it can
 /// underflow to zero for two small values of the same sign.
 fn sign_change(u: f64, v: f64) -> bool {
     u == 0.0 || v == 0.0 || (u < 0.0) != (v < 0.0)

@@ -33,6 +33,7 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       python: ${{ steps.filter.outputs.python }}
       lean: ${{ steps.filter.outputs.lean }}
+      oracle: ${{ steps.filter.outputs.oracle }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -55,17 +56,25 @@ jobs:
               - 'crates/*/examples/**'
               - 'bindings/python/Cargo.toml'
               - 'bindings/python/src/**'
+              - 'oracle/Cargo.toml'
+              - 'oracle/src/**'
+              - 'oracle/tests/**'
             # The bindings are built from the Rust code, so Rust changes count.
             python:
               - *rust
               - 'bindings/python/**'
               - 'crates/*/python/**'
-            lean:
+            lean: &lean
               - *shared
               - 'lakefile.toml'
               - 'lake-manifest.json'
               - 'lean-toolchain'
               - 'crates/*/lean/**'
+              - 'oracle/lean/**'
+            # The oracle compares the two, so a change to either counts.
+            oracle:
+              - *rust
+              - *lean
 
   rust:
     needs: changes
@@ -105,11 +114,27 @@ jobs:
           use-mathlib-cache: true
       - run: scripts/check.sh lean
 
+  # Runs the Rust code against the Lean definitions, so it needs both
+  # toolchains.
+  oracle:
+    needs: changes
+    if: ${{ !cancelled() && (inputs.all || needs.changes.outputs.oracle == 'true') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - uses: leanprover/lean-action@v1
+        with:
+          auto-config: false
+          use-mathlib-cache: true
+      - run: scripts/check.sh oracle
+
   # The single status that branch protection requires. Jobs skipped because
   # nothing they cover has changed count as passing.
   ci:
     if: always()
-    needs: [changes, rust, python, lean]
+    needs: [changes, rust, python, lean, oracle]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
