@@ -7,15 +7,18 @@ nearest f64. Run from the repository root:
         python crates/thole-roots/python/reference_values.py
 
 and copy the output into `tests/bisection.rs`, `tests/brent.rs`,
-`python/test_bisect.py` and `python/test_brent.py`.
+`tests/newton.rs`, `python/test_bisect.py`, `python/test_brent.py` and
+`python/test_newton.py`.
 
 For Brent's method, the result and the number of function evaluations of
-`scipy.optimize.brentq` are printed too. The functions of that part use only
-`+`, `-` and `*`, so that they have the same values in Python and in Rust.
+`scipy.optimize.brentq` are printed too, and for Newton's method those of
+`scipy.optimize.newton` with a derivative. The functions of those parts use
+only `+`, `-` and `*`, so that they have the same values in Python and in
+Rust.
 """
 
 from mpmath import cos, exp, findroot, mp
-from scipy.optimize import brentq
+from scipy.optimize import brentq, newton
 
 mp.dps = 50
 
@@ -44,3 +47,13 @@ BRENT_PROBLEMS = [
 for name, f, bracket in BRENT_PROBLEMS:
     x, result = brentq(f, *bracket, full_output=True)
     print(f"brentq, {name}: {x!r}, {result.function_calls} evaluations")
+
+NEWTON_PROBLEMS = [
+    ("x^3 - x - 2 from 1.5", lambda x: x * x * x - x - 2.0, lambda x: 3.0 * x * x - 1.0, 1.5),
+    ("x^2 - 2 from 1", lambda x: x * x - 2.0, lambda x: 2.0 * x, 1.0),
+    ("x^2 - 2 from 1000", lambda x: x * x - 2.0, lambda x: 2.0 * x, 1000.0),
+]
+
+for name, f, df, x0 in NEWTON_PROBLEMS:
+    x, result = newton(f, x0, fprime=df, tol=1.48e-8, full_output=True)
+    print(f"newton, {name}: {float(x)!r}, {result.iterations} steps")
