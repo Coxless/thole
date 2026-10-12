@@ -16,12 +16,13 @@ two `f64` values, answer with the result of that operation in the model of
 `nan`. The Rust tests use them to check the model against the real thing.
 -/
 import Thole.Oracle.Roots
+import Thole.Oracle.Quad
 
 open Thole.Oracle
 
 /-- The requests of every area. -/
 def requests : List (String × (List String → Except String Verdict)) :=
-  rootsRequests
+  rootsRequests ++ quadRequests
 
 /-- The answer to one request line. -/
 def respond (line : String) : String :=

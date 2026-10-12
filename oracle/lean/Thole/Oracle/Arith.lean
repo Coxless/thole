@@ -40,6 +40,12 @@ structure Arith (α : Type) where
   lt : α → α → Bool
   le : α → α → Bool
   eq : α → α → Bool
+  /-- Whether a value is a finite number: not an infinity, not a NaN. -/
+  finite : α → Bool
+  /-- A constant of the program: a literal of the Rust code, or an integer
+  converted to `f64`. In `f64` arithmetic it is the nearest `f64`, as Rust
+  rounds a literal. -/
+  ofRat : ℚ → α
   zero : α
   one : α
   two : α
@@ -56,6 +62,8 @@ def Arith.exact : Arith ℚ where
   lt x y := decide (x < y)
   le x y := decide (x ≤ y)
   eq x y := decide (x = y)
+  finite _ := true
+  ofRat q := q
   zero := 0
   one := 1
   two := 2
@@ -161,6 +169,11 @@ def F64.eq : F64 → F64 → Bool
   | .inf n, .inf m => n == m
   | _, _ => false
 
+/-- `x.is_finite()`. -/
+def F64.finite : F64 → Bool
+  | .fin _ => true
+  | _ => false
+
 /-- `f64` arithmetic. -/
 def Arith.f64 : Arith F64 where
   add := F64.add
@@ -172,10 +185,17 @@ def Arith.f64 : Arith F64 where
   lt := F64.lt
   le := F64.le
   eq := F64.eq
+  finite := F64.finite
+  ofRat := F64.round
   zero := .fin 0
   one := .fin 1
   two := .fin 2
   three := .fin 3
+
+/-- The value as a rational number, or `none` for an infinity or a NaN. -/
+def F64.toRat : F64 → Option ℚ
+  | .fin q => some q
+  | _ => none
 
 /-- How a value is written in an answer: a fraction, `inf`, `-inf` or `nan`. -/
 def F64.toLine : F64 → String
