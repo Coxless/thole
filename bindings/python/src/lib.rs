@@ -6,11 +6,13 @@
 
 use pyo3::prelude::*;
 
+mod quad;
 mod roots;
 
 #[pymodule]
 fn _thole(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     roots::register(m)?;
+    quad::register(m)?;
     Ok(())
 }
