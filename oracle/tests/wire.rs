@@ -59,6 +59,7 @@ fn the_oracle_refuses_what_it_cannot_read() {
         "f64 12".to_owned(),
         "no.such.request".to_owned(),
         "roots.bisect.spec".to_owned(),
+        "roots.brent.bound".to_owned(),
     ] {
         let answer = oracle.ask_raw(&request);
         assert!(answer.starts_with("error "), "{request}: {answer}");
