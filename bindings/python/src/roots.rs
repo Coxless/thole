@@ -16,7 +16,7 @@ create_exception!(
 /// A root located by a bracketing method.
 #[pyclass(frozen, get_all, module = "thole.roots")]
 struct Root {
-    /// The approximation of the root: the midpoint of the final bracket.
+    /// The approximation of the root. It lies in the final bracket.
     x: f64,
     /// Lower end of the final bracket.
     lo: f64,
@@ -69,6 +69,29 @@ fn options(xtol: Option<f64>, rtol: Option<f64>, max_iter: Option<usize>) -> Opt
     }
 }
 
+/// Runs a root finder on the Python function `f`.
+fn solve(
+    f: &Bound<'_, PyAny>,
+    method: impl FnOnce(&mut dyn FnMut(f64) -> f64) -> Result<roots::Root, Error>,
+) -> PyResult<Root> {
+    // An exception raised by `f` is kept here; NaN then stops the iteration.
+    let mut raised = None;
+    let result = method(
+        &mut |x| match f.call1((x,)).and_then(|y| y.extract::<f64>()) {
+            Ok(y) => y,
+            Err(error) => {
+                raised.get_or_insert(error);
+                f64::NAN
+            }
+        },
+    );
+    match (raised, result) {
+        (Some(error), _) => Err(error),
+        (None, Ok(root)) => Ok(root.into()),
+        (None, Err(error)) => Err(to_py_err(error)),
+    }
+}
+
 /// Find a root of `f` in `[a, b]` by bisection.
 ///
 /// `f` must be continuous on `[a, b]`, and `f(a)` and `f(b)` must not have
@@ -91,30 +114,43 @@ fn bisect(
     rtol: Option<f64>,
     max_iter: Option<usize>,
 ) -> PyResult<Root> {
-    // An exception raised by `f` is kept here; NaN then stops the iteration.
-    let mut raised = None;
-    let result = roots::bisect(
-        |x| match f.call1((x,)).and_then(|y| y.extract::<f64>()) {
-            Ok(y) => y,
-            Err(error) => {
-                raised.get_or_insert(error);
-                f64::NAN
-            }
-        },
-        a,
-        b,
-        &options(xtol, rtol, max_iter),
-    );
-    match (raised, result) {
-        (Some(error), _) => Err(error),
-        (None, Ok(root)) => Ok(root.into()),
-        (None, Err(error)) => Err(to_py_err(error)),
-    }
+    let options = options(xtol, rtol, max_iter);
+    solve(f, |f| roots::bisect(f, a, b, &options))
+}
+
+/// Find a root of `f` in `[a, b]` by Brent's method.
+///
+/// `f` must be continuous on `[a, b]`, and `f(a)` and `f(b)` must not have
+/// the same strict sign. Each step is an interpolation step when that is
+/// safe and a bisection otherwise, which takes far fewer steps than `bisect`
+/// for a smooth function. The iteration stops when `f` is zero at the
+/// approximation `x`, or when the root is known to be within
+/// `xtol + rtol * abs(x)` of it. `x` is an end of the final bracket.
+///
+/// Defaults: `xtol=2e-12`, `rtol=4 * sys.float_info.epsilon`, `max_iter=100`.
+///
+/// Raises `ValueError` for an invalid bracket or tolerance, when there is no
+/// sign change, or when `f` returns NaN, and `ConvergenceError` when the
+/// tolerance is not reached within `max_iter` steps. An exception raised by
+/// `f` propagates unchanged.
+#[pyfunction]
+#[pyo3(signature = (f, a, b, *, xtol=None, rtol=None, max_iter=None))]
+fn brent(
+    f: &Bound<'_, PyAny>,
+    a: f64,
+    b: f64,
+    xtol: Option<f64>,
+    rtol: Option<f64>,
+    max_iter: Option<usize>,
+) -> PyResult<Root> {
+    let options = options(xtol, rtol, max_iter);
+    solve(f, |f| roots::brent(f, a, b, &options))
 }
 
 pub(crate) fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let m = PyModule::new(parent.py(), "roots")?;
     m.add_function(wrap_pyfunction!(bisect, &m)?)?;
+    m.add_function(wrap_pyfunction!(brent, &m)?)?;
     m.add_class::<Root>()?;
     m.add(
         "ConvergenceError",

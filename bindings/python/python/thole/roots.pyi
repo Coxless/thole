@@ -23,3 +23,13 @@ def bisect(
     rtol: float | None = None,
     max_iter: int | None = None,
 ) -> Root: ...
+
+def brent(
+    f: Callable[[float], float],
+    a: float,
+    b: float,
+    *,
+    xtol: float | None = None,
+    rtol: float | None = None,
+    max_iter: int | None = None,
+) -> Root: ...

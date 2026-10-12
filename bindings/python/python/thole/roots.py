@@ -5,5 +5,6 @@ from ._thole import roots as _roots
 ConvergenceError = _roots.ConvergenceError
 Root = _roots.Root
 bisect = _roots.bisect
+brent = _roots.brent
 
-__all__ = ["ConvergenceError", "Root", "bisect"]
+__all__ = ["ConvergenceError", "Root", "bisect", "brent"]

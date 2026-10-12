@@ -86,7 +86,9 @@ Because the theorems and the checks come from one definition, the specification 
 - The oracle is a separate process, fed through its standard input. This keeps 3.1 intact and needs no bindings between Lean and Rust.
 - Numbers cross as the bit patterns of `f64` values, which the oracle reads as exact rational numbers. The comparison is made on the Lean side, so the Rust side needs no exact arithmetic.
 - A closure cannot be sent, so the two sides agree on a family of functions that both can evaluate. So far that is polynomials. Functions outside the family (`cos`, `exp`) are covered by the reference-value tests (section 7).
-- Every algorithm gets two checks. Where `f64` arithmetic takes the same decisions as exact arithmetic, the result must be exactly what the definition computes; the oracle works out whether that is the case and skips the call otherwise. For any finite input, the result must have the proved properties up to rounding.
+- Every algorithm gets two checks: its result must be exactly what the definition computes, and for any finite input it must have the proved properties up to rounding.
+- The first check takes one of two forms. Where an algorithm only adds, subtracts, multiplies and halves, as bisection does, `f64` arithmetic is often exact: the definition is run over the rational numbers, and the oracle works out whether `f64` arithmetic takes the same decisions and skips the call otherwise. Where an algorithm divides, as Brent's method does, `f64` arithmetic is exact almost nowhere and that form would skip everything. The oracle then runs the sequence of operations of the Rust code in a model of `f64` arithmetic over the rational numbers (rounding to nearest, ties to even), and the Rust result must be that of the model, bit for bit, for any finite input.
+- The second form needs the sequence of operations written a second time, over any arithmetic (`oracle/lean/Thole/Oracle/<Algorithm>.lean`). A theorem states that with exact arithmetic it is the definition (`<Algorithm>Proofs.lean`), so it cannot drift from the definition the theorems are about. The model of `f64` arithmetic is tested against the `f64` arithmetic of Rust, operation by operation, on operands drawn at random.
 - The rounding error that a check allows is itself a Lean definition (for example `hornerError`), with its source cited. Nothing is allowed "approximately".
 - The oracle must be shown to tell right from wrong: for each check, tests give it results that are wrong in one respect and require `fail`.
 
@@ -102,8 +104,9 @@ Be clear about what this does and does not guarantee.
 
 - Proved: the mathematical properties of the algorithm as defined, over the real numbers.
 - Tested: that the Rust code follows that definition, and that rounding stays within the stated bounds, on the problems that were drawn. No counterexample among them is not a proof.
+- Tested as well: that the model of `f64` arithmetic is `f64` arithmetic. It is not derived from the IEEE 754 standard in Lean.
 - Assumed: the rounding error bounds that the oracle uses. They are taken from the literature, not proved in Lean.
-- Outside the model: NaN, infinities and overflow. The real numbers have none of them, so the oracle is not asked about them. The tests of each crate cover them (section 7).
+- Outside the model: NaN, infinities and overflow. The real numbers have none of them, so the oracle is not asked about them. The tests of each crate cover them (section 7). The model of `f64` arithmetic does have infinities, so that it stays faithful when an intermediate result overflows, but the arguments and the result of a call are finite.
 
 ### 3.6 English only
 
@@ -186,6 +189,10 @@ Decided with bisection, the first algorithm:
 - **Python**: one submodule per area (`thole.roots`). Options become keyword-only arguments, with `None` meaning the Rust default. Invalid input raises `ValueError`; a failure to converge raises the area's `ConvergenceError`, a `RuntimeError`. An exception raised by the user's function propagates unchanged. Results are read-only objects.
 - **Lean**: the iteration is defined over any linearly ordered field with one definition per step of the Rust loop, including the stopping test. The Rust documentation lists the theorems under a `# Proofs` heading, and the header of `Defs.lean` has a table that maps definitions to Rust code. Where Rust must deviate for floating-point reasons (sign comparison instead of a product, an overflow-free midpoint), the Rust comment says so.
 - **Tests that tie the two together**: the oracle (3.5). For bisection, `roots.bisect.spec` requires the outcome, the number of steps and the bracket to be exactly those of the Lean definitions, and `roots.bisect.bound` requires the properties of the theorems up to rounding. The functions are polynomials evaluated by Horner's rule, and the sign of a value counts as known only when the value is further from zero than the rounding error bound of that evaluation.
+
+Decided with Brent's method, the first algorithm that divides:
+
+- **The check against the definition when `f64` arithmetic is not exact**: the second form of 3.5. `roots.brent.spec` requires the outcome, the number of steps, the approximation and the bracket to be those of the program in `oracle/lean/Thole/Oracle/Brent.lean` run in the model of `f64` arithmetic. This fixes the order of the operations in the Rust code: rearranging them changes the rounding, and the check fails.
 
 ### Stage 2: core and dense matrix basics
 
