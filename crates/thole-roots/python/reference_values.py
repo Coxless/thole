@@ -6,8 +6,8 @@ nearest f64. Run from the repository root:
     workshop exec -- uv run --no-project --with mpmath==1.3.0 --with scipy==1.18.1 \
         python crates/thole-roots/python/reference_values.py
 
-and copy the output into `tests/bisection.rs`, `tests/brent.rs` and
-`python/test_bisect.py`.
+and copy the output into `tests/bisection.rs`, `tests/brent.rs`,
+`python/test_bisect.py` and `python/test_brent.py`.
 
 For Brent's method, the result and the number of function evaluations of
 `scipy.optimize.brentq` are printed too. The functions of that part use only
