@@ -4,7 +4,7 @@ Pure Rust, no C/Fortran: scientific computing with every algorithm implemented f
 
 A family of scientific computing crates written in pure Rust. It does not rely on external computation engines such as BLAS or LAPACK: every numerical algorithm is implemented from scratch. Everything is callable from Python. The algorithms are also defined in Lean 4: their mathematical properties are proved there, and the results of the Rust code are checked against those definitions.
 
-**Status: early development.** Bisection is complete. Brent's method lacks one of its two oracle checks, the comparison with the Lean definitions. The principles and the roadmap are in [CONCEPT.md](CONCEPT.md).
+**Status: early development.** Bisection and Brent's method are implemented so far. The principles and the roadmap are in [CONCEPT.md](CONCEPT.md).
 
 ```rust
 use thole::roots::{Options, bisect};
@@ -38,7 +38,7 @@ Each area keeps its Lean definitions and proofs in `crates/<crate>/lean/`, its P
 | Area | Algorithm | Lean proofs | Oracle checks |
 |---|---|---|---|
 | `thole-roots` | Bisection: `thole::roots::bisect`, `thole.roots.bisect` | [`Bisection.lean`](crates/thole-roots/lean/Thole/Roots/Bisection.lean): the bracket always contains a root; error at most `(b - a) / 2 ^ (n + 1)` after `n` steps; guarantee of the stopping criterion; convergence. | [`Roots.lean`](oracle/lean/Thole/Oracle/Roots.lean): the same outcome, step count and bracket as the Lean definitions where `f64` arithmetic is exact; the proved properties up to rounding for any finite input. |
-| `thole-roots` | Brent's method: `thole::roots::brent`, `thole.roots.brent` | [`Brent.lean`](crates/thole-roots/lean/Thole/Roots/Brent.lean): a root always lies between the approximation and the point of opposite sign; guarantee of the stopping criterion; the iteration stops, after at most `2 * (b - a) / t` steps for a tolerance of at least `t`. | [`Roots.lean`](oracle/lean/Thole/Oracle/Roots.lean): the proved properties up to rounding for any finite input. The comparison with the Lean definitions is still to come: an interpolation step is never exact in `f64`. |
+| `thole-roots` | Brent's method: `thole::roots::brent`, `thole.roots.brent` | [`Brent.lean`](crates/thole-roots/lean/Thole/Roots/Brent.lean): a root always lies between the approximation and the point of opposite sign; guarantee of the stopping criterion; the iteration stops, after at most `2 * (b - a) / t` steps for a tolerance of at least `t`. | [`Roots.lean`](oracle/lean/Thole/Oracle/Roots.lean): the same outcome, step count, approximation and bracket, bit for bit, as the Lean definitions run in a model of `f64` arithmetic ([`Brent.lean`](oracle/lean/Thole/Oracle/Brent.lean), [`BrentProofs.lean`](oracle/lean/Thole/Oracle/BrentProofs.lean)); the proved properties up to rounding. Both for any finite input. |
 
 ## Development
 
@@ -63,6 +63,8 @@ workshop refresh                # after changing base / sdks / hooks under .work
 ### The oracle
 
 Each algorithm is defined once in Lean, over any ordered field (`crates/<crate>/lean/.../Defs.lean`). The theorems are about that definition over the real numbers. The same definition runs over the rational numbers, with exact arithmetic, in the executable `thole-oracle`, and the tests in `oracle/tests/` use it to judge what the Rust code returns: they draw polynomials and arguments at random, call the Rust function, and send the call and its result to the oracle.
+
+Where an algorithm divides, `f64` arithmetic is exact almost nowhere, and the oracle compares differently: it runs the operations of the Rust code in a model of `f64` arithmetic over the rational numbers, and the Rust result must be the same bit for bit. A theorem states that with exact arithmetic those operations are the definition. CONCEPT.md, section 3.5, has the details.
 
 ```sh
 workshop run -- check oracle                    # build the oracle and run the tests

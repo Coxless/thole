@@ -17,17 +17,19 @@ There are two checks of `thole_roots::bisect`.
   `Thole/Roots/Bisection.lean` give, up to stated rounding errors. This works
   for any finite input.
 
-There is one check of `thole_roots::brent`.
+There are two checks of `thole_roots::brent`.
 
+- `checkBrentSpec`: the result is exactly what the program of `Brent.lean`
+  computes in the model of `f64` arithmetic of `Arith.lean`. That program is
+  the specification (`Thole.Roots.brent` and the definitions around it) when
+  its arithmetic is exact, which `BrentProofs.lean` proves. An interpolation
+  step divides, so `f64` arithmetic is exact almost nowhere and the comparison
+  that bisection has would skip every call that takes a step.
 - `checkBrentBound`: the result has the properties that the theorems in
   `Thole/Roots/Brent.lean` give, up to stated rounding errors.
-
-Brent's method has no check against the specification yet. An interpolation
-step divides, so its result is not an `f64` even when its operands are, and
-`f64` arithmetic is never exact beyond the first step. The comparison that
-bisection has would skip every call that takes a step.
 -/
 import Thole.Oracle.Poly
+import Thole.Oracle.Brent
 import Thole.Roots.Bisection.Defs
 
 namespace Thole.Oracle
@@ -157,6 +159,43 @@ def checkBisectBound (c : BracketCall) (r : BracketResult) : Verdict :=
       require (c.tol ((lo + hi) / 2) ≤ (hi - lo) / 2 * slack + minPositive)
         "the stopping test holds" .ok
 
+/-! ### Brent's method: agreement with the specification -/
+
+/-- Checks that the result is exactly what the program of `Brent.lean`
+computes in `f64` arithmetic.
+
+The polynomial is evaluated as `Poly::eval` does (`hornerG`), the tolerance is
+computed as the Rust code does (`brentTolG`), and `runG` takes the steps of
+`brentG` until the stopping test holds or the iteration limit is reached. The
+call must have ended in the same way, after the same number of steps, with the
+same approximation and the same bracket. -/
+def checkBrentSpec (c : BracketCall) (r : BracketResult) : Verdict :=
+  if ¬(c.a ≤ c.b ∧ 0 ≤ c.abs ∧ 0 ≤ c.rel) then .skip "the arguments are not valid"
+  else
+    let A := Arith.f64
+    let f := hornerG A (c.coeffs.map .fin)
+    let tol := brentTolG A (.fin c.abs) (.fin c.rel)
+    if !signChangeG A (f (.fin c.a)) (f (.fin c.b)) then
+      match r with
+      | .noSignChange => .ok
+      | _ => .fail "the model has no sign change over the bracket"
+    else
+      let (done, steps, s) := runG A f tol c.maxIter 0 (initG A f (.fin c.a) (.fin c.b))
+      match s.cur, s.contra with
+      | .fin cur, .fin contra =>
+        let lo' := min cur contra
+        let hi' := max cur contra
+        match done, r with
+        | true, .root x lo hi iterations =>
+          require (iterations == steps) s!"the model stops after {steps} steps" <|
+          require (x == cur) s!"the model returns {cur}" <|
+          require (lo == lo' && hi == hi') s!"the model ends with the bracket [{lo'}, {hi'}]" .ok
+        | false, .maxIterations lo hi =>
+          require (lo == lo' && hi == hi') s!"the model ends with the bracket [{lo'}, {hi'}]" .ok
+        | true, _ => .fail s!"the model stops after {steps} steps"
+        | false, _ => .fail "the model does not stop within the iteration limit"
+      | _, _ => .skip "the model leaves the finite numbers"
+
 /-! ### Brent's method: the guarantees, up to rounding -/
 
 /-- The tolerance that `thole_roots::brent` passes to the definitions: half
@@ -235,6 +274,9 @@ def rootsRequests : List (String × (List String → Except String Verdict)) :=
    ("roots.bisect.bound", fun args => do
       let (call, result) ← parseBracket args
       pure (checkBisectBound call result)),
+   ("roots.brent.spec", fun args => do
+      let (call, result) ← parseBracket args
+      pure (checkBrentSpec call result)),
    ("roots.brent.bound", fun args => do
       let (call, result) ← parseBracket args
       pure (checkBrentBound call result))]

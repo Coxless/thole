@@ -217,19 +217,36 @@ fn a_root_at_a_midpoint_is_skipped_by_the_exact_comparison() {
 
 // ---- The same, for Brent's method -----------------------------------------
 
+const BRENT_CHECKS: [Check; 2] = [Check::BrentSpec, Check::BrentBound];
+
+/// Requires each of the checks to answer `fail`.
+fn assert_rejected(call: &BracketCall, checks: &[Check], wrong: &Result<Root, Error>) {
+    for &check in checks {
+        let verdict = ask(&call.request(check, wrong));
+        assert!(
+            matches!(verdict, Verdict::Fail(_)),
+            "{check:?} {wrong:?}: {verdict:?}"
+        );
+    }
+}
+
+/// Requires each of the checks to answer `ok`.
+fn assert_accepted(call: &BracketCall, checks: &[Check], result: &Result<Root, Error>) {
+    for &check in checks {
+        let verdict = ask(&call.request(check, result));
+        assert_eq!(verdict, Verdict::Ok, "{check:?} {result:?}");
+    }
+}
+
 #[test]
 fn a_brent_root_is_accepted_and_wrong_roots_are_rejected() {
     let call = sqrt_two();
     let root = unwrap_root(call.brent());
     assert!(root.iterations > 1 && root.lo < root.hi);
-    assert_eq!(
-        ask(&call.request(Check::BrentBound, &Ok(root))),
-        Verdict::Ok
-    );
+    assert_accepted(&call, &BRENT_CHECKS, &Ok(root));
 
     let width = root.hi - root.lo;
-    let other_end = if root.x == root.lo { root.hi } else { root.lo };
-    let wrong = [
+    let wrong_for_both = [
         // The bracket next to the right one: no sign change.
         Ok(Root {
             x: root.x + width,
@@ -269,21 +286,68 @@ fn a_brent_root_is_accepted_and_wrong_roots_are_rejected() {
             hi: root.hi,
         }),
     ];
-    for wrong in wrong {
-        let verdict = ask(&call.request(Check::BrentBound, &wrong));
-        assert!(
-            matches!(verdict, Verdict::Fail(_)),
-            "{wrong:?}: {verdict:?}"
-        );
+    for wrong in wrong_for_both {
+        assert_rejected(&call, &BRENT_CHECKS, &wrong);
     }
 
-    // The other end of the bracket is as good an answer, as far as the
-    // theorems go: they do not say which end is the approximation.
-    let swapped = Ok(Root {
-        x: other_end,
-        ..root
-    });
-    assert_eq!(ask(&call.request(Check::BrentBound, &swapped)), Verdict::Ok);
+    // Only the comparison with the specification sees these. As far as the
+    // theorems go, they are as good an answer.
+    let x_is_lo = root.x == root.lo;
+    let wrong_for_spec = [
+        // The other end of the bracket.
+        Root {
+            x: if x_is_lo { root.hi } else { root.lo },
+            ..root
+        },
+        // One step more or less than were taken.
+        Root {
+            iterations: root.iterations + 1,
+            ..root
+        },
+        Root {
+            iterations: root.iterations - 1,
+            ..root
+        },
+        // The neighbouring `f64`, away from the root: an operation rounded
+        // the other way.
+        if x_is_lo {
+            Root {
+                x: root.x.next_down(),
+                lo: root.lo.next_down(),
+                ..root
+            }
+        } else {
+            Root {
+                x: root.x.next_up(),
+                hi: root.hi.next_up(),
+                ..root
+            }
+        },
+        // The other end of the bracket moved by one `f64`.
+        if x_is_lo {
+            Root {
+                hi: root.hi.next_up(),
+                ..root
+            }
+        } else {
+            Root {
+                lo: root.lo.next_down(),
+                ..root
+            }
+        },
+    ];
+    for wrong in wrong_for_spec {
+        assert_accepted(&call, &[Check::BrentBound], &Ok(wrong));
+        assert_rejected(&call, &[Check::BrentSpec], &Ok(wrong));
+    }
+}
+
+/// What bisection returns for the same call is not what Brent's method
+/// returns.
+#[test]
+fn the_result_of_bisection_is_rejected_for_brent() {
+    let call = sqrt_two();
+    assert_rejected(&call, &BRENT_CHECKS, &call.bisect());
 }
 
 /// When the value at the approximation is zero, the iteration stops however
@@ -294,10 +358,7 @@ fn a_brent_root_with_a_long_bracket_is_accepted_only_at_a_zero() {
     let call = call(&[-1.0, 2.0], 0.0, 4.0, 2.0_f64.powi(-10), 0.0, 100);
     let root = unwrap_root(call.brent());
     assert_eq!((root.x, root.lo, root.hi), (0.5, 0.5, 4.0));
-    assert_eq!(
-        ask(&call.request(Check::BrentBound, &Ok(root))),
-        Verdict::Ok
-    );
+    assert_accepted(&call, &BRENT_CHECKS, &Ok(root));
 
     let not_a_zero = Ok(Root {
         x: 4.0,
@@ -305,8 +366,7 @@ fn a_brent_root_with_a_long_bracket_is_accepted_only_at_a_zero() {
         hi: 4.0,
         ..root
     });
-    let verdict = ask(&call.request(Check::BrentBound, &not_a_zero));
-    assert!(matches!(verdict, Verdict::Fail(_)), "{verdict:?}");
+    assert_rejected(&call, &BRENT_CHECKS, &not_a_zero);
 }
 
 #[test]
@@ -315,15 +375,14 @@ fn a_missing_sign_change_is_accepted_and_a_brent_root_is_rejected() {
     let call = call(&[1.0, 0.0, 1.0], -1.0, 2.0, 2.0_f64.powi(-10), 0.0, 100);
     let result = call.brent();
     assert!(matches!(result, Err(Error::NoSignChange { .. })));
-    assert_eq!(ask(&call.request(Check::BrentBound, &result)), Verdict::Ok);
+    assert_accepted(&call, &BRENT_CHECKS, &result);
     let invented = Ok(Root {
         x: 0.5,
         lo: 0.5,
         hi: 0.5 + 2.0_f64.powi(-10),
         iterations: 5,
     });
-    let verdict = ask(&call.request(Check::BrentBound, &invented));
-    assert!(matches!(verdict, Verdict::Fail(_)), "{verdict:?}");
+    assert_rejected(&call, &BRENT_CHECKS, &invented);
 }
 
 #[test]
@@ -339,9 +398,9 @@ fn the_brent_iteration_limit_is_accepted_and_wrong_brackets_are_rejected() {
     let Err(Error::MaxIterations { max_iter, lo, hi }) = result else {
         panic!("{result:?}");
     };
-    assert_eq!(ask(&call.request(Check::BrentBound, &result)), Verdict::Ok);
+    assert_accepted(&call, &BRENT_CHECKS, &result);
 
-    let wrong = [
+    let wrong_for_both = [
         // A bracket next to the right one: no sign change.
         Err(Error::MaxIterations {
             max_iter,
@@ -355,12 +414,30 @@ fn the_brent_iteration_limit_is_accepted_and_wrong_brackets_are_rejected() {
             hi,
         }),
     ];
-    for wrong in wrong {
-        let verdict = ask(&call.request(Check::BrentBound, &wrong));
-        assert!(
-            matches!(verdict, Verdict::Fail(_)),
-            "{wrong:?}: {verdict:?}"
-        );
+    for wrong in wrong_for_both {
+        assert_rejected(&call, &BRENT_CHECKS, &wrong);
+    }
+
+    // Only the comparison with the specification sees these: the bracket one
+    // step earlier, and a root where the limit was hit.
+    let earlier = BracketCall {
+        options: Options {
+            max_iter: max_iter - 1,
+            ..call.options
+        },
+        ..call.clone()
+    };
+    let wrong_for_spec = [
+        earlier.brent(),
+        Ok(Root {
+            x: lo,
+            lo,
+            hi,
+            iterations: max_iter,
+        }),
+    ];
+    for wrong in wrong_for_spec {
+        assert_rejected(&call, &[Check::BrentSpec], &wrong);
     }
 }
 
@@ -484,6 +561,17 @@ proptest! {
     fn bisect_result_has_the_proved_properties(call in any_call()) {
         let result = call.bisect();
         let verdict = ask(&call.request(Check::BisectBound, &result));
+        prop_assert_eq!(verdict, Verdict::Ok, "{:?}", result);
+    }
+
+    /// For any finite arguments, `brent` returns exactly what the Lean
+    /// definitions compute in the model of `f64` arithmetic: the same
+    /// outcome, after the same number of steps, with the same approximation
+    /// and the same bracket.
+    #[test]
+    fn brent_agrees_with_the_specification(call in any_call()) {
+        let result = call.brent();
+        let verdict = ask(&call.request(Check::BrentSpec, &result));
         prop_assert_eq!(verdict, Verdict::Ok, "{:?}", result);
     }
 

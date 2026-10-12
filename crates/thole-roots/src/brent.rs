@@ -72,11 +72,11 @@ use crate::{Error, Options, Root};
 /// smooth `f` are not proved; the Lean file says why.
 ///
 /// The proofs are about the Lean definitions, and do not cover
-/// floating-point rounding. That the results of this function have the first
-/// two properties, up to rounding, is tested: the oracle (`oracle/` in the
-/// repository) checks them with exact rational arithmetic, on polynomials
-/// drawn at random. It does not yet compare the steps of this function with
-/// those of the definitions.
+/// floating-point rounding. That this function follows the definitions is
+/// tested: the oracle (`oracle/` in the repository) runs them in a model of
+/// `f64` arithmetic and requires the results of this function to be the
+/// same, bit for bit, on polynomials drawn at random. The order of the
+/// operations below is therefore part of what is tested.
 ///
 /// # Examples
 ///

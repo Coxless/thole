@@ -19,6 +19,10 @@ pub enum Check {
     /// to rounding (`checkBisectBound`). Decided for every call with finite
     /// arguments.
     BisectBound,
+    /// The result of [`brent`] is exactly what the Lean definitions compute
+    /// in a model of `f64` arithmetic (`checkBrentSpec`). Decided for every
+    /// call with finite arguments.
+    BrentSpec,
     /// The result of [`brent`] has the properties the Lean theorems give, up
     /// to rounding (`checkBrentBound`). Decided for every call with finite
     /// arguments.
@@ -61,6 +65,7 @@ impl BracketCall {
         let name = match check {
             Check::BisectSpec => "roots.bisect.spec",
             Check::BisectBound => "roots.bisect.bound",
+            Check::BrentSpec => "roots.brent.spec",
             Check::BrentBound => "roots.brent.bound",
         };
         let tol = self.options.tol;
