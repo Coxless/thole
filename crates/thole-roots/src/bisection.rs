@@ -1,17 +1,5 @@
-use crate::{Error, Options};
-
-/// A root located by a bracketing method.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Root {
-    /// The approximation of the root: the midpoint of the final bracket.
-    pub x: f64,
-    /// Lower end of the final bracket.
-    pub lo: f64,
-    /// Upper end of the final bracket.
-    pub hi: f64,
-    /// Number of bisection steps taken.
-    pub iterations: usize,
-}
+use crate::bracket::{check_arguments, eval, sign_change};
+use crate::{Error, Options, Root};
 
 /// Finds a root of `f` in `[a, b]` by bisection.
 ///
@@ -20,7 +8,8 @@ pub struct Root {
 /// The bracket starts as `[a, b]`. Each step evaluates `f` at the midpoint
 /// and keeps the half over which `f` still changes sign, so the width halves
 /// every step. The iteration stops when half the width of the bracket is at
-/// most `options.tol.bound(midpoint)`, and returns the midpoint.
+/// most `options.tol.bound(midpoint)`, and returns the midpoint as
+/// [`Root::x`].
 ///
 /// `f` is evaluated once at `a`, once at `b`, and once per step.
 ///
@@ -81,25 +70,9 @@ pub fn bisect(
     b: f64,
     options: &Options,
 ) -> Result<Root, Error> {
-    if !(a.is_finite() && b.is_finite() && a <= b) {
-        return Err(Error::InvalidBracket { a, b });
-    }
+    check_arguments(a, b, options)?;
     let tol = options.tol;
-    if !tol.is_valid() {
-        return Err(Error::InvalidTolerance {
-            abs: tol.abs,
-            rel: tol.rel,
-        });
-    }
-
-    let mut eval = |x: f64| {
-        let fx = f(x);
-        if fx.is_nan() {
-            Err(Error::NanValue { x })
-        } else {
-            Ok(fx)
-        }
-    };
+    let mut eval = |x: f64| eval(&mut f, x);
 
     let (mut lo, mut hi) = (a, b);
     let mut f_lo = eval(lo)?;
@@ -137,40 +110,5 @@ pub fn bisect(
             f_lo = f_mid;
         }
         iterations += 1;
-    }
-}
-
-/// Whether `u` and `v` have opposite signs or one of them is zero.
-///
-/// Over the real numbers this is `u * v <= 0`, the form used in the Lean
-/// definition `SignChange`, which the oracle evaluates exactly. The product is avoided here because it can
-/// underflow to zero for two small values of the same sign.
-fn sign_change(u: f64, v: f64) -> bool {
-    u == 0.0 || v == 0.0 || (u < 0.0) != (v < 0.0)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::sign_change;
-
-    #[test]
-    fn sign_change_matches_the_sign_of_the_product() {
-        let values = [-2.0, -1e-300, -0.0, 0.0, 1e-300, 2.0, f64::INFINITY];
-        for u in values {
-            for v in values {
-                let expected = match (u == 0.0, v == 0.0) {
-                    (false, false) => (u < 0.0) != (v < 0.0),
-                    _ => true,
-                };
-                assert_eq!(sign_change(u, v), expected, "u = {u}, v = {v}");
-            }
-        }
-    }
-
-    #[test]
-    fn sign_change_does_not_underflow() {
-        // The product of these underflows to 0, which would look like a sign change.
-        assert_eq!(1e-200 * 1e-200, 0.0);
-        assert!(!sign_change(1e-200, 1e-200));
     }
 }
