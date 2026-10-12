@@ -1,7 +1,9 @@
-# Lean proofs for the thole crates. Each crate keeps its proofs next to its
-# Rust code, in `crates/<crate>/lean/`, as one library of this package.
+# Lean code for the thole crates. Each crate keeps its definitions and proofs
+# next to its Rust code, in `crates/<crate>/lean/`, as one library of this
+# package. The oracle that the Rust results are checked against is in
+# `oracle/lean/`: a library, and the executable `thole-oracle`.
 name = "thole"
-defaultTargets = ["TholeRoots"]
+defaultTargets = ["TholeRoots", "TholeOracle", "thole-oracle"]
 
 [[require]]
 name = "mathlib"
@@ -12,3 +14,13 @@ rev = "v4.34.1"
 name = "TholeRoots"
 srcDir = "crates/thole-roots/lean"
 globs = ["Thole.Roots.+"]
+
+[[lean_lib]]
+name = "TholeOracle"
+srcDir = "oracle/lean"
+globs = ["Thole.Oracle.+"]
+
+[[lean_exe]]
+name = "thole-oracle"
+srcDir = "oracle/lean"
+root = "Main"

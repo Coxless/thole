@@ -2,7 +2,7 @@
 
 Pure Rust, no C/Fortran: scientific computing with every algorithm implemented from scratch.
 
-A family of scientific computing crates written in pure Rust. It does not rely on external computation engines such as BLAS or LAPACK: every numerical algorithm is implemented from scratch. Everything is callable from Python, and the mathematical properties of the algorithms are proved in Lean 4.
+A family of scientific computing crates written in pure Rust. It does not rely on external computation engines such as BLAS or LAPACK: every numerical algorithm is implemented from scratch. Everything is callable from Python. The algorithms are also defined in Lean 4: their mathematical properties are proved there, and the results of the Rust code are checked against those definitions.
 
 **Status: early development.** Only bisection is implemented so far. The principles and the roadmap are in [CONCEPT.md](CONCEPT.md).
 
@@ -31,12 +31,13 @@ assert abs(root.x - 2**0.5) < 1e-11
 | `crates/thole-linalg` | Matrix types, LU decomposition and so on |
 | `crates/thole-ode` | Ordinary differential equations |
 | `bindings/python` | The Python package `thole` (PyO3 + maturin) |
+| `oracle` | The Lean oracle and the tests that check the Rust results against it. Not published |
 
-Each area keeps its Lean proofs in `crates/<crate>/lean/`, its Python tests in `crates/<crate>/python/` and its notebooks in `crates/<crate>/notebooks/`, next to the Rust code in `src/`.
+Each area keeps its Lean definitions and proofs in `crates/<crate>/lean/`, its Python tests in `crates/<crate>/python/` and its notebooks in `crates/<crate>/notebooks/`, next to the Rust code in `src/`.
 
-| Area | Algorithm | Lean proofs |
-|---|---|---|
-| `thole-roots` | Bisection: `thole::roots::bisect`, `thole.roots.bisect` | [`Bisection.lean`](crates/thole-roots/lean/Thole/Roots/Bisection.lean): the bracket always contains a root; error at most `(b - a) / 2 ^ (n + 1)` after `n` steps; guarantee of the stopping criterion; convergence. |
+| Area | Algorithm | Lean proofs | Oracle checks |
+|---|---|---|---|
+| `thole-roots` | Bisection: `thole::roots::bisect`, `thole.roots.bisect` | [`Bisection.lean`](crates/thole-roots/lean/Thole/Roots/Bisection.lean): the bracket always contains a root; error at most `(b - a) / 2 ^ (n + 1)` after `n` steps; guarantee of the stopping criterion; convergence. | [`Roots.lean`](oracle/lean/Thole/Oracle/Roots.lean): the same outcome, step count and bracket as the Lean definitions where `f64` arithmetic is exact; the proved properties up to rounding for any finite input. |
 
 ## Development
 
@@ -50,13 +51,26 @@ workshop run -- setup    # fetch dependencies, create the Python environment, fe
 workshop run -- test     # cargo test (arguments are passed through)
 workshop run -- fmt      # cargo fmt
 workshop run -- check    # everything CI runs
-workshop run -- check rust     # or: python, lean, package
+workshop run -- check rust     # or: python, lean, oracle, package
 workshop run -- notebook # JupyterLab with Python and Rust kernels
 
 workshop exec -- cargo <args>   # one-off command
 workshop shell                  # open a shell inside
 workshop refresh                # after changing base / sdks / hooks under .workshop/
 ```
+
+### The oracle
+
+Each algorithm is defined once in Lean, over any ordered field (`crates/<crate>/lean/.../Defs.lean`). The theorems are about that definition over the real numbers. The same definition runs over the rational numbers, with exact arithmetic, in the executable `thole-oracle`, and the tests in `oracle/tests/` use it to judge what the Rust code returns: they draw polynomials and arguments at random, call the Rust function, and send the call and its result to the oracle.
+
+```sh
+workshop run -- check oracle                    # build the oracle and run the tests
+workshop exec -- cargo test -p thole-oracle     # the tests alone, once `lake build` has run
+```
+
+The oracle is a separate process and exists only for these tests. The published crates contain Rust only and do not depend on it. `cargo test` at the root does not run these tests, so it needs no Lean.
+
+A failing input is written to `oracle/tests/<area>.proptest-regressions`. Commit that file: the input is tried first from then on.
 
 ### Notebooks
 
@@ -76,7 +90,7 @@ The repository follows [GitHub flow](https://docs.github.com/en/get-started/usin
 
 `main` is protected: changes reach it only through a pull request, the `ci` check must pass, and the branch must be up to date with `main` before it is merged.
 
-CI runs on pull requests only: once when one is opened, and once for every push to its branch after that. A branch with no open pull request is not checked, so open the pull request early or run `workshop run -- check`. It runs only the jobs whose files have changed (Rust, Python, Lean), and all of them call `scripts/check.sh`, the same script as `workshop run -- check`.
+CI runs on pull requests only: once when one is opened, and once for every push to its branch after that. A branch with no open pull request is not checked, so open the pull request early or run `workshop run -- check`. It runs only the jobs whose files have changed (Rust, Python, Lean, and the oracle when either Rust or Lean has), and all of them call `scripts/check.sh`, the same script as `workshop run -- check`.
 
 ### Releasing
 
