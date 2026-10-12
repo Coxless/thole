@@ -491,8 +491,13 @@ fn a_newton_root_is_accepted_and_wrong_roots_are_rejected() {
             step: 1e-15,
             ..root
         }),
-        // A step longer than the tolerance.
-        Ok(NewtonRoot { step: 1e-3, ..root }),
+        // A step longer than the tolerance, at a point where f is not zero.
+        // (At the root itself the result would be fine: f is zero there.)
+        Ok(NewtonRoot {
+            x: 1.4,
+            step: 1e-3,
+            ..root
+        }),
         // More steps than the limit allows.
         Ok(NewtonRoot {
             iterations: 101,

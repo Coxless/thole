@@ -30,6 +30,7 @@ the effect of floating-point rounding, are what the oracle tests.
 import Thole.Roots.Newton.Defs
 import Thole.Roots.Bisection
 import Mathlib.Analysis.Calculus.MeanValue
+import Mathlib.Analysis.Calculus.Deriv.MeanValue
 import Mathlib.Tactic.FieldSimp
 import Mathlib.Tactic.GCongr
 
@@ -72,15 +73,14 @@ theorem abs_sub_tangent_le {s : Set ℝ} (hs : Convex ℝ s)
   let g : ℝ → ℝ := fun t => f t - df x * t
   have hg : ∀ t ∈ Set.uIcc x y, HasDerivWithinAt g (df t - df x) (Set.uIcc x y) t := by
     intro t ht
-    have := (hf t (hsub ht)).sub ((hasDerivAt_id t).const_mul (df x))
-    simpa using this.hasDerivWithinAt
+    have h1 : HasDerivAt (fun t => df x * t) (df x) t := by
+      simpa using (hasDerivAt_id t).const_mul (df x)
+    exact ((hf t (hsub ht)).sub h1).hasDerivWithinAt
   have hb : ∀ t ∈ Set.uIcc x y, ‖df t - df x‖ ≤ L * |y - x| := by
     intro t ht
     rw [Real.norm_eq_abs]
     calc |df t - df x| ≤ L * |t - x| := hL t (hsub ht) x hx
-      _ ≤ L * |y - x| := by
-        gcongr
-        exact Set.abs_sub_left_of_mem_uIcc ht
+      _ ≤ L * |y - x| := mul_le_mul_of_nonneg_left (Set.abs_sub_left_of_mem_uIcc ht) hL0
   have := (convex_uIcc x y).norm_image_sub_le_of_norm_hasDerivWithin_le hg hb
     Set.left_mem_uIcc Set.right_mem_uIcc
   rw [Real.norm_eq_abs, Real.norm_eq_abs] at this
@@ -99,12 +99,12 @@ theorem newtonStep_error {s : Set ℝ} (hs : Convex ℝ s)
     (hL : ∀ y ∈ s, ∀ z ∈ s, |df y - df z| ≤ L * |y - z|) {x r : ℝ} (hx : x ∈ s)
     (hr : r ∈ s) (hfr : f r = 0) (hdx : df x ≠ 0) :
     |newtonStep f df x - r| ≤ L * (x - r) ^ 2 / |df x| := by
-  have key : newtonStep f df x - r = -(f r - f x - df x * (r - x)) / df x := by
+  have key : newtonStep f df x - r = (f r - f x - df x * (r - x)) / df x := by
     unfold newtonStep
     rw [hfr]
     field_simp
     ring
-  rw [key, abs_div, abs_neg]
+  rw [key, abs_div]
   have h := abs_sub_tangent_le hs hf hL0 hL hx hr
   have hsq : (r - x) ^ 2 = (x - r) ^ 2 := by ring
   rw [hsq] at h
@@ -200,7 +200,7 @@ theorem newtonStep_exists_root {x : ℝ}
   -- So `f` must reach zero within `ρ = |f x'| / m` of `x'`.
   set ρ := |f x'| / m with hρ
   have hρ0 : 0 ≤ ρ := by positivity
-  have hρL : ρ ≤ L * s ^ 2 / m := by gcongr
+  have hρL : ρ ≤ L * s ^ 2 / m := by rw [hρ]; gcongr
   have hρs : ρ ≤ s := by
     refine hρL.trans ?_
     rw [div_le_iff₀ hm]
@@ -244,10 +244,12 @@ theorem newtonStep_exists_root {x : ℝ}
     rcases h₁ with h₁ | h₁ <;> rcases h₂ with h₂ | h₂
     · exact Or.inr ⟨by linarith, by linarith⟩
     · exfalso
-      obtain ⟨c, hc, hc0⟩ := hivt (Set.mem_uIcc.mpr (Or.inl ⟨by linarith, by linarith⟩))
+      obtain ⟨c, hc, hc0⟩ := hivt (show (0 : ℝ) ∈ Set.uIcc (df c₁) (df c₂) from
+        Set.mem_uIcc.mpr (Or.inl ⟨by linarith, by linarith⟩))
       exact hnz c hc hc0
     · exfalso
-      obtain ⟨c, hc, hc0⟩ := hivt (Set.mem_uIcc.mpr (Or.inr ⟨by linarith, by linarith⟩))
+      obtain ⟨c, hc, hc0⟩ := hivt (show (0 : ℝ) ∈ Set.uIcc (df c₁) (df c₂) from
+        Set.mem_uIcc.mpr (Or.inr ⟨by linarith, by linarith⟩))
       exact hnz c hc hc0
     · exact Or.inl ⟨h₁, h₂⟩
   have hmρ : m * ρ = |f x'| := by rw [hρ]; field_simp

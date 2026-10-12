@@ -102,9 +102,9 @@ not finite. -/
 def integrateG (xs ws : List α) (f : α → α) (a b : α) : Except α α :=
   let c := A.add (A.div a A.two) (A.div b A.two)
   let h := A.sub (A.div b A.two) (A.div a A.two)
-  let sum := (xs.zip ws).foldlM (fun acc p =>
+  let sum : Except α α := (xs.zip ws).foldlM (fun (acc : α) (p : α × α) =>
     let y := A.add c (A.mul h p.1)
-    if A.finite (f y) then .ok (A.add acc (A.mul p.2 (f y))) else .error y) A.zero
+    if A.finite (f y) then Except.ok (A.add acc (A.mul p.2 (f y))) else Except.error y) A.zero
   sum.map (A.mul h)
 
 end Thole.Oracle

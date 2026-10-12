@@ -61,12 +61,16 @@ theorem partition_split (ss : List (Segment ℝ)) (i : ℕ) {a b : ℝ} (h : Par
     have hss : ss = ss.take i ++ [s] ++ ss.drop (i + 1) := by
       rw [List.append_assoc, List.singleton_append, ← (List.getElem?_eq_some_iff.mp hs).2,
         ← List.drop_eq_getElem_cons hi, List.take_append_drop]
-    rw [hss, partition_append, partition_append] at h
-    obtain ⟨m', ⟨m, h₁, hm⟩, h₃⟩ := h
+    rw [hss, partition_append] at h
+    obtain ⟨m', h12, h₃⟩ := h
+    rw [partition_append] at h12
+    obtain ⟨m, h₁, hm⟩ := h12
     simp only [Partition] at hm
     obtain ⟨hsa, rfl⟩ := hm
-    rw [partition_append, partition_append]
-    refine ⟨s.b, ⟨m, h₁, ?_⟩, h₃⟩
+    rw [partition_append]
+    refine ⟨s.b, ?_, h₃⟩
+    rw [partition_append]
+    refine ⟨m, h₁, ?_⟩
     simp [Partition, mkSegment, hsa]
 
 /-- **Partition.** After any number of halvings, the subintervals partition

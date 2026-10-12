@@ -32,6 +32,7 @@ integrate polynomials of degree `2n - 1` up to rounding.
 -/
 import Thole.Quad.GaussLegendre.Defs
 import Mathlib.Algebra.Polynomial.Div
+import Mathlib.Topology.Algebra.Polynomial
 import Mathlib.MeasureTheory.Integral.IntervalIntegral.Basic
 import Mathlib.MeasureTheory.Integral.IntervalIntegral.FundThmCalculus
 import Mathlib.Tactic.FieldSimp
@@ -120,10 +121,10 @@ theorem gauss_exact {n : ℕ} {xs ws : List ℝ} {P : ℝ[X]} (hP : P.Monic) (hd
   -- `q = P * s + r` with `s` and `r` of degree below `n`.
   set s := q /ₘ P
   set r := q %ₘ P
-  have hqsr : q = P * s + r := (modByMonic_add_div q hP).symm.trans (add_comm _ _)
+  have hqsr : q = P * s + r := (modByMonic_add_div q P).symm.trans (add_comm _ _)
   have hr : r.natDegree < n := hdeg ▸ natDegree_modByMonic_lt q hP hP1
   have hs : s.natDegree < n := by
-    rw [natDegree_divByMonic, hdeg]
+    rw [natDegree_divByMonic _ hP, hdeg]
     omega
   have hint : ∀ p : ℝ[X], IntervalIntegrable (fun t => p.eval t) MeasureTheory.volume (-1) 1 :=
     fun p => p.continuous.intervalIntegrable _ _
@@ -174,7 +175,6 @@ theorem rule_exact_of_exact {d : ℕ} {xs ws : List ℝ}
   · have hab : a = b := by linarith [show b / 2 - a / 2 = 0 from h0]
     rw [h0, zero_mul, hab, intervalIntegral.integral_same]
   · have := intervalIntegral.integral_comp_mul_add (fun t => q.eval t) h0 c (a := -1) (b := 1)
-    simp only at this
     have hl : h * -1 + c = a := by simp only [h, c]; ring
     have hu : h * 1 + c = b := by simp only [h, c]; ring
     rw [hl, hu] at this

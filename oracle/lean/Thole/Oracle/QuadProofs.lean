@@ -61,17 +61,22 @@ theorem legendrePairG_exact (n : ℕ) (hn : 1 ≤ n) (x : ℚ) :
 
 theorem legendreDerivG_exact (n : ℕ) (hn : 1 ≤ n) (x : ℚ) :
     legendreDerivG .exact n x = legendreDeriv n x := by
-  simp only [legendreDerivG, legendrePairG_exact n hn, legendreDeriv, natG, Arith.exact]
+  unfold legendreDerivG
+  rw [legendrePairG_exact n hn]
+  simp only [legendreDeriv, natG, Arith.exact]
 
 theorem weightG_exact (n : ℕ) (hn : 1 ≤ n) (x : ℚ) : weightG .exact n x = gaussWeight n x := by
-  simp only [weightG, legendreDerivG_exact n hn, gaussWeight, Arith.exact]
+  unfold weightG
+  rw [legendreDerivG_exact n hn]
+  simp only [gaussWeight, Arith.exact]
 
 /-- A Newton step for a node is `gaussNodeStep`, which is
 `Thole.Roots.newtonStep` on `legendre` and `legendreDeriv`. -/
 theorem nodeStepG_exact (n : ℕ) (hn : 1 ≤ n) (x : ℚ) :
     (nodeStepG .exact n x).2 = gaussNodeStep n x := by
-  simp only [nodeStepG, legendrePairG_exact n hn, legendreDerivG_exact n hn, gaussNodeStep,
-    Thole.Roots.newtonStep, legendre, Arith.exact]
+  unfold nodeStepG
+  rw [legendrePairG_exact n hn, legendreDerivG_exact n hn]
+  simp only [gaussNodeStep, Thole.Roots.newtonStep, legendre, Arith.exact]
 
 theorem foldlM_ok {β γ ε : Type} (g : β → γ → Except ε β) (h : β → γ → β)
     (hg : ∀ b c, g b c = .ok (h b c)) (l : List γ) (init : β) :
@@ -85,7 +90,7 @@ theorem foldlM_ok {β γ ε : Type} (g : β → γ → Except ε β) (h : β →
 /-- `GaussLegendre::integrate` is `rule`. -/
 theorem integrateG_exact (xs ws : List ℚ) (f : ℚ → ℚ) (a b : ℚ) :
     integrateG .exact xs ws f a b = .ok (rule xs ws f a b) := by
-  simp only [integrateG, Arith.exact, if_true]
+  simp only [integrateG, Arith.exact, ite_true]
   rw [foldlM_ok _ (fun acc (p : ℚ × ℚ) => acc + p.2 * f (a / 2 + b / 2 + (b / 2 - a / 2) * p.1))
     (fun _ _ => rfl)]
   rfl
@@ -96,13 +101,7 @@ variable (xgk wgk wg : List ℚ) (f tol : ℚ → ℚ)
 
 theorem segmentG_exact (a b : ℚ) :
     segmentG .exact xgk wgk wg f a b = .ok (mkSegment (kronrodEstimate xgk wgk wg f) a b) := by
-  simp only [segmentG, evalG, Arith.exact, if_true]
-  rw [foldlM_ok _ (fun (kg : ℚ × ℚ) j =>
-      (kg.1 + wgk.getD j 0 * (f (a / 2 + b / 2 - (b / 2 - a / 2) * xgk.getD j 0) +
-          f (a / 2 + b / 2 + (b / 2 - a / 2) * xgk.getD j 0)),
-        if j % 2 = 1 then kg.2 + wg.getD (j / 2) 0 * (f (a / 2 + b / 2 - (b / 2 - a / 2) *
-          xgk.getD j 0) + f (a / 2 + b / 2 + (b / 2 - a / 2) * xgk.getD j 0)) else kg.2))
-    (fun _ _ => rfl)]
+  simp only [segmentG, evalG, Arith.exact, ite_true]
   rfl
 
 theorem totalsG_foldl (ss : List (Segment ℚ)) (v e : ℚ) :
@@ -133,10 +132,38 @@ theorem worstG_exact (ss : List (Segment ℚ)) : worstG .exact ss = worstIndex s
 theorem splitG_exact (ss : List (Segment ℚ)) (i : ℕ) :
     splitG .exact xgk wgk wg f ss i = .ok (split (kronrodEstimate xgk wgk wg f) ss i) := by
   unfold splitG split
-  split
-  · rfl
-  · simp only [Arith.exact, segmentG_exact]
+  cases ss[i]? with
+  | none => rfl
+  | some s =>
+    simp only [segmentG_exact]
     rfl
+
+/-- The loop with exact arithmetic and no fuel left. -/
+theorem runGkG_exact_zero (maxSub : ℕ) (ss : List (Segment ℚ)) :
+    runGkG .exact xgk wgk wg f tol maxSub 0 ss =
+      if gkDone tol ss then .integral (totalValue ss) (totalError ss) ss.length
+      else .maxSubintervals (totalValue ss) (totalError ss) := by
+  rw [runGkG]
+  simp only [totalsG_exact]
+  simp only [Arith.exact, decide_eq_true_eq, gkDone]
+  by_cases hd : totalError ss ≤ tol (totalValue ss) <;> simp [hd]
+
+/-- The loop with exact arithmetic: the halvings of `gkStep`. -/
+theorem runGkG_exact_succ (maxSub fuel : ℕ) (ss : List (Segment ℚ)) :
+    runGkG .exact xgk wgk wg f tol maxSub (fuel + 1) ss =
+      if gkDone tol ss then .integral (totalValue ss) (totalError ss) ss.length
+      else if maxSub ≤ ss.length then .maxSubintervals (totalValue ss) (totalError ss)
+      else runGkG .exact xgk wgk wg f tol maxSub fuel (gkStep (kronrodEstimate xgk wgk wg f) ss) := by
+  rw [runGkG]
+  simp only [totalsG_exact, worstG_exact, splitG_exact]
+  have hle : Arith.exact.le (totalError ss) (tol (totalValue ss)) =
+      decide (totalError ss ≤ tol (totalValue ss)) := rfl
+  rw [hle]
+  by_cases hd : totalError ss ≤ tol (totalValue ss)
+  · simp [hd, gkDone]
+  · by_cases hm : maxSub ≤ ss.length
+    · simp [hd, hm, gkDone]
+    · simp only [hd, hm, gkDone, gkStep, decide_false, Bool.false_eq_true, ite_false]
 
 /-- **The loop is the specification.** With exact arithmetic, when the loop
 started from the subintervals after `m` halvings returns an integral, it
@@ -151,25 +178,18 @@ theorem runGkG_exact (a b : ℚ) (maxSub fuel m : ℕ) {v e : ℚ} {k : ℕ}
       gkDone tol (gk (kronrodEstimate xgk wgk wg f) a b n) := by
   induction fuel generalizing m with
   | zero =>
-    unfold runGkG at h
-    simp only [totalsG_exact, Arith.exact, decide_eq_true_eq] at h
+    rw [runGkG_exact_zero] at h
     split_ifs at h with h₁
-    · injection h with hv he hk
-      exact ⟨m, hv.symm, he.symm, hk.symm, h₁⟩
+    cases h
+    exact ⟨m, rfl, rfl, rfl, h₁⟩
   | succ fuel ih =>
-    unfold runGkG at h
-    simp only [totalsG_exact, Arith.exact, decide_eq_true_eq] at h
+    rw [runGkG_exact_succ] at h
     split_ifs at h with h₁ h₂
-    · injection h with hv he hk
-      exact ⟨m, hv.symm, he.symm, hk.symm, h₁⟩
-    · have hs := splitG_exact xgk wgk wg f (gk (kronrodEstimate xgk wgk wg f) a b m)
-        (worstG .exact (gk (kronrodEstimate xgk wgk wg f) a b m))
-      simp only [Arith.exact] at hs
-      rw [hs, worstG_exact] at h
-      have hstep : split (kronrodEstimate xgk wgk wg f) (gk (kronrodEstimate xgk wgk wg f) a b m)
-          (worstIndex (gk (kronrodEstimate xgk wgk wg f) a b m)) =
+    · cases h
+      exact ⟨m, rfl, rfl, rfl, h₁⟩
+    · have hstep : gkStep (kronrodEstimate xgk wgk wg f) (gk (kronrodEstimate xgk wgk wg f) a b m) =
           gk (kronrodEstimate xgk wgk wg f) a b (m + 1) := by
-        simp only [gk, Function.iterate_succ_apply', gkStep]
+        simp only [gk, Function.iterate_succ_apply']
       rw [hstep] at h
       exact ih (m + 1) h
 
