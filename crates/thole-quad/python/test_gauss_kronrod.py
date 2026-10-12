@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from thole.quad import ConvergenceError, Integral, gauss_kronrod
+from thole.quad import ConvergenceError, Integral, gauss_kronrod, gauss_kronrod_rule
 
 ATOL = RTOL = 1.49e-8
 
@@ -99,3 +99,14 @@ def test_exception_in_callback_propagates():
 def test_non_numeric_return_value():
     with pytest.raises(TypeError):
         gauss_kronrod(lambda x: "not a number", 0.0, 1.0)
+
+
+def test_the_rules_are_exact_for_their_degrees():
+    nodes, kronrod, gauss = gauss_kronrod_rule()
+    assert len(nodes) == len(kronrod) == len(gauss) == 15
+    assert nodes == sorted(nodes)
+    for k in range(23):
+        exact = 2 / (k + 1) if k % 2 == 0 else 0.0
+        assert abs(sum(w * x**k for x, w in zip(nodes, kronrod)) - exact) <= 1e-15
+        if k <= 13:
+            assert abs(sum(w * x**k for x, w in zip(nodes, gauss)) - exact) <= 1e-15

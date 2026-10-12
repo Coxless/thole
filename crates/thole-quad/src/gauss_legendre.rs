@@ -2,6 +2,7 @@ use std::f64::consts::PI;
 
 use crate::Error;
 use crate::error::{check_interval, eval};
+use crate::interval::center_and_half;
 
 /// The `n`-point Gauss-Legendre rule: its nodes and weights on `[-1, 1]`.
 ///
@@ -151,10 +152,7 @@ impl GaussLegendre {
     /// - [`Error::NonFiniteValue`] if `f` returns NaN or an infinity.
     pub fn integrate(&self, mut f: impl FnMut(f64) -> f64, a: f64, b: f64) -> Result<f64, Error> {
         check_interval(a, b)?;
-        let c = f64::midpoint(a, b);
-        // Each end is halved before the subtraction, so that this does not
-        // overflow.
-        let h = b / 2.0 - a / 2.0;
+        let (c, h) = center_and_half(a, b);
         let mut sum = 0.0;
         for (&x, &w) in self.nodes.iter().zip(&self.weights) {
             sum += w * eval(&mut f, c + h * x)?;

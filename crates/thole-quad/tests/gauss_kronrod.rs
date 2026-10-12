@@ -166,10 +166,11 @@ fn error_estimate_bounds_the_error() {
 /// estimate, not a bound.
 #[test]
 fn a_peak_between_the_nodes_is_missed() {
-    let f = |x: f64| 1.0 + if (x - 0.5).abs() < 1e-6 { 1e6 } else { 0.0 };
+    let f = |x: f64| 1.0 + if (x - 0.55).abs() < 1e-6 { 1e6 } else { 0.0 };
     let integral = gauss_kronrod(f, 0.0, 1.0, &Options::default()).unwrap();
     assert_eq!(integral.value, 1.0);
     assert_eq!(integral.error, 0.0);
+    assert_eq!(integral.subintervals, 1);
     // The true integral is about 3.
 }
 

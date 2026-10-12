@@ -9,6 +9,7 @@
 mod error;
 mod gauss_kronrod;
 mod gauss_legendre;
+mod interval;
 mod options;
 
 pub use error::Error;

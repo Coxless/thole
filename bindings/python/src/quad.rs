@@ -177,10 +177,22 @@ fn gauss_kronrod(
     run(f, |f| quad::gauss_kronrod(f, a, b, &options)).map(Integral::from)
 }
 
+/// The nodes and weights of the 7-point Gauss and 15-point Kronrod rules
+/// used by `gauss_kronrod`, on `[-1, 1]`: `(nodes, kronrod_weights,
+/// gauss_weights)`, the nodes in increasing order. The Gauss weight of a node
+/// that belongs to the Kronrod rule only is zero. The constants are those of
+/// QUADPACK's `qk15`.
+#[pyfunction]
+fn gauss_kronrod_rule() -> (Vec<f64>, Vec<f64>, Vec<f64>) {
+    let (nodes, kronrod, gauss) = quad::gauss_kronrod_rule();
+    (nodes.to_vec(), kronrod.to_vec(), gauss.to_vec())
+}
+
 pub(crate) fn register(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let m = PyModule::new(parent.py(), "quad")?;
     m.add_function(wrap_pyfunction!(gauss_legendre, &m)?)?;
     m.add_function(wrap_pyfunction!(gauss_kronrod, &m)?)?;
+    m.add_function(wrap_pyfunction!(gauss_kronrod_rule, &m)?)?;
     m.add_class::<GaussLegendre>()?;
     m.add_class::<Integral>()?;
     m.add(

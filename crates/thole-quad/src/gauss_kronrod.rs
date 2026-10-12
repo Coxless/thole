@@ -1,4 +1,5 @@
 use crate::error::{check_interval, eval};
+use crate::interval::center_and_half;
 use crate::{Error, Options};
 
 /// An integral computed by an adaptive method.
@@ -97,8 +98,7 @@ struct Segment {
 /// integral over `[a, b]`, with the difference from the 7-point Gauss
 /// estimate as the error estimate.
 fn segment(f: &mut impl FnMut(f64) -> f64, a: f64, b: f64) -> Result<Segment, Error> {
-    let c = f64::midpoint(a, b);
-    let h = b / 2.0 - a / 2.0;
+    let (c, h) = center_and_half(a, b);
     let fc = eval(f, c)?;
     let mut kronrod = WGK[7] * fc;
     let mut gauss = WG[3] * fc;
@@ -165,14 +165,17 @@ fn segment(f: &mut impl FnMut(f64) -> f64, a: f64, b: f64) -> Result<Segment, Er
 /// # Proofs
 ///
 /// `lean/Thole/Quad/GaussKronrod/Defs.lean` defines the same iteration over
-/// any ordered field (`gkSegment`, `gkStep`, `gk`, `gkDone`), and
-/// `lean/Thole/Quad/GaussKronrod.lean` proves, over the real numbers:
+/// any ordered field (`kronrodEstimate`, `gkStep`, `gk`, `gkDone`), and
+/// `lean/Thole/Quad/GaussKronrod.lean` proves, over the real numbers and for
+/// any estimate of the subintegrals:
 ///
 /// - `gk_partition`: the subintervals always partition `[a, b]`, in order.
-/// - `gk_error_le`: the error of the returned estimate is at most the sum of
-///   the errors over the subintervals. So if the error estimate of every
-///   subinterval bounds its error, the returned error estimate bounds the
-///   error of the returned value.
+/// - `gk_length`: after `n` halvings there are `n + 1` subintervals.
+/// - `gk_error_le`: the error of the returned value is at most the sum of
+///   the errors over the subintervals.
+/// - `gk_error_le_of_local`: so if the error estimate of every subinterval
+///   bounds its error, the returned error estimate bounds the error of the
+///   returned value.
 ///
 /// That the error estimate of a subinterval bounds its error is not proved,
 /// because it is not true in general. The exactness of the rules for
@@ -246,7 +249,7 @@ pub fn gauss_kronrod(
             }
         }
         let Segment { a, b, .. } = segments[worst];
-        let mid = f64::midpoint(a, b);
+        let (mid, _) = center_and_half(a, b);
         let left = segment(&mut f, a, mid)?;
         let right = segment(&mut f, mid, b)?;
         segments[worst] = left;
