@@ -5,9 +5,9 @@
 use proptest::prelude::*;
 use proptest::test_runner::FileFailurePersistence;
 use thole_core::Tolerance;
-use thole_oracle::roots::{BracketCall, Check};
+use thole_oracle::roots::{BracketCall, Check, NewtonCall};
 use thole_oracle::{Poly, Verdict, ask};
-use thole_roots::{Error, Options, Root};
+use thole_roots::{Error, NewtonRoot, Options, Root};
 
 fn call(coeffs: &[f64], a: f64, b: f64, abs: f64, rel: f64, max_iter: usize) -> BracketCall {
     BracketCall {
@@ -441,6 +441,170 @@ fn the_brent_iteration_limit_is_accepted_and_wrong_brackets_are_rejected() {
     }
 }
 
+// ---- The same, for Newton's method ----------------------------------------
+
+const NEWTON_CHECKS: [Check; 2] = [Check::NewtonSpec, Check::NewtonBound];
+
+fn newton_call(coeffs: &[f64], x0: f64, abs: f64, max_iter: usize) -> NewtonCall {
+    NewtonCall::with_derivative(
+        Poly(coeffs.to_vec()),
+        x0,
+        Options {
+            tol: Tolerance::new(abs, 0.0),
+            max_iter,
+        },
+    )
+}
+
+fn assert_newton_verdict(
+    call: &NewtonCall,
+    checks: &[Check],
+    result: &Result<NewtonRoot, Error>,
+    expected: fn(&Verdict) -> bool,
+) {
+    for &check in checks {
+        let verdict = ask(&call.request(check, result));
+        assert!(expected(&verdict), "{check:?} {result:?}: {verdict:?}");
+    }
+}
+
+fn is_ok(verdict: &Verdict) -> bool {
+    *verdict == Verdict::Ok
+}
+
+fn is_fail(verdict: &Verdict) -> bool {
+    matches!(verdict, Verdict::Fail(_))
+}
+
+#[test]
+fn a_newton_root_is_accepted_and_wrong_roots_are_rejected() {
+    // x^2 - 2 from 1, to full precision.
+    let call = newton_call(&[-2.0, 0.0, 1.0], 1.0, 1e-15, 100);
+    let root = call.newton().expect("the call finds a root");
+    assert!(root.iterations > 2);
+    assert_newton_verdict(&call, &NEWTON_CHECKS, &Ok(root), is_ok);
+
+    let wrong_for_both = [
+        // A short step far from the root.
+        Ok(NewtonRoot {
+            x: 1.5,
+            step: 1e-15,
+            ..root
+        }),
+        // A step longer than the tolerance, at a point where f is not zero.
+        // (At the root itself the result would be fine: f is zero there.)
+        Ok(NewtonRoot {
+            x: 1.4,
+            step: 1e-3,
+            ..root
+        }),
+        // More steps than the limit allows.
+        Ok(NewtonRoot {
+            iterations: 101,
+            ..root
+        }),
+        // No step taken, but not at the starting point.
+        Ok(NewtonRoot {
+            step: 0.0,
+            iterations: 0,
+            ..root
+        }),
+        // The derivative is not zero there.
+        Err(Error::ZeroDerivative { x: 1.0 }),
+    ];
+    for wrong in wrong_for_both {
+        assert_newton_verdict(&call, &NEWTON_CHECKS, &wrong, is_fail);
+    }
+
+    // Only the comparison with the specification sees these.
+    let wrong_for_spec = [
+        Ok(NewtonRoot {
+            x: root.x.next_up(),
+            ..root
+        }),
+        Ok(NewtonRoot {
+            step: root.step * 2.0,
+            ..root
+        }),
+        Ok(NewtonRoot {
+            iterations: root.iterations - 1,
+            ..root
+        }),
+        Err(Error::NotConverged {
+            max_iter: 100,
+            x: root.x,
+        }),
+    ];
+    for wrong in wrong_for_spec {
+        assert_newton_verdict(&call, &[Check::NewtonBound], &wrong, is_ok);
+        assert_newton_verdict(&call, &[Check::NewtonSpec], &wrong, is_fail);
+    }
+}
+
+#[test]
+fn newton_errors_are_accepted_and_wrong_errors_are_rejected() {
+    // A zero derivative at the start.
+    let call = newton_call(&[-2.0, 0.0, 1.0], 0.0, 1e-15, 100);
+    let result = call.newton();
+    assert_eq!(result, Err(Error::ZeroDerivative { x: 0.0 }));
+    assert_newton_verdict(&call, &NEWTON_CHECKS, &result, is_ok);
+
+    // The cycle between 0 and 1 of x^3 - 2x + 2.
+    let call = newton_call(&[2.0, -2.0, 0.0, 1.0], 0.0, 1e-15, 7);
+    let result = call.newton();
+    assert_eq!(
+        result,
+        Err(Error::NotConverged {
+            max_iter: 7,
+            x: 1.0
+        })
+    );
+    assert_newton_verdict(&call, &NEWTON_CHECKS, &result, is_ok);
+    let wrong = [
+        Err(Error::NotConverged {
+            max_iter: 7,
+            x: 0.0,
+        }),
+        Ok(NewtonRoot {
+            x: 1.0,
+            step: -1.0,
+            iterations: 7,
+        }),
+    ];
+    for wrong in wrong {
+        assert_newton_verdict(&call, &[Check::NewtonSpec], &wrong, is_fail);
+    }
+}
+
+/// The guarantee is about the derivative of `f`. A call with another
+/// derivative is not decided by the comparison with the theorems.
+#[test]
+fn a_wrong_derivative_is_skipped_by_the_bound_check() {
+    let call = NewtonCall {
+        deriv: Poly(vec![0.0, 3.0]),
+        ..newton_call(&[-2.0, 0.0, 1.0], 1.0, 1e-15, 100)
+    };
+    let result = call.newton();
+    assert!(result.is_ok(), "{result:?}");
+    assert_newton_verdict(&call, &[Check::NewtonSpec], &result, is_ok);
+    assert_newton_verdict(&call, &[Check::NewtonBound], &result, |v| {
+        matches!(v, Verdict::Skip(_))
+    });
+}
+
+/// At a double root the derivative vanishes, and the guarantee cannot be
+/// established.
+#[test]
+fn a_double_root_is_skipped_by_the_bound_check() {
+    let call = newton_call(&[1.0, -2.0, 1.0], 2.0, 1e-6, 100);
+    let result = call.newton();
+    assert!(result.is_ok(), "{result:?}");
+    assert_newton_verdict(&call, &[Check::NewtonSpec], &result, is_ok);
+    assert_newton_verdict(&call, &[Check::NewtonBound], &result, |v| {
+        matches!(v, Verdict::Skip(_))
+    });
+}
+
 // ---- Random calls ---------------------------------------------------------
 
 /// `n / 2^shift` for an integer `n` with `|n| <= limit`.
@@ -539,8 +703,66 @@ fn any_call() -> impl Strategy<Value = BracketCall> {
         })
 }
 
+/// A number with at most 44 significant bits, so that multiplying it by an
+/// integer up to 7 is exact.
+fn short(x: f64) -> f64 {
+    f64::from_bits(x.to_bits() & !0x1ff)
+}
+
+/// Calls of [`thole_roots::newton`] with any finite arguments that cannot
+/// overflow, and the exact derivative. Most polynomials are given a constant
+/// term that puts a root near the starting point.
+fn newton_any_call() -> impl Strategy<Value = NewtonCall> {
+    let default = Options::default();
+    (
+        prop::collection::vec(scaled(), 2..=7),
+        scaled(),
+        prop::option::weighted(0.8, -1.0..1.0),
+        prop_oneof![Just(0.0), Just(default.tol.abs), 1e-15..1e-3],
+        prop_oneof![Just(0.0), Just(default.tol.rel), 1e-16..1e-6],
+        prop_oneof![Just(default.max_iter), 0..=60_usize],
+    )
+        .prop_map(|(coeffs, x0, offset, abs, rel, max_iter)| {
+            let mut coeffs: Vec<f64> = coeffs.into_iter().map(short).collect();
+            if let Some(offset) = offset {
+                coeffs[0] = 0.0;
+                let constant = -Poly(coeffs.clone()).eval(x0 + offset);
+                coeffs[0] = short(constant);
+            }
+            let options = Options {
+                tol: Tolerance::new(abs, rel),
+                max_iter,
+            };
+            NewtonCall::with_derivative(Poly(coeffs), short(x0), options)
+        })
+}
+
 proptest! {
     #![proptest_config(config(2000))]
+
+    /// For any finite arguments, `newton` returns exactly what the Lean
+    /// definitions compute in the model of `f64` arithmetic: the same
+    /// outcome, after the same number of steps, with the same approximation
+    /// and the same last step.
+    #[test]
+    fn newton_agrees_with_the_specification(call in newton_any_call()) {
+        let result = call.newton();
+        let verdict = ask(&call.request(Check::NewtonSpec, &result));
+        prop_assert_eq!(verdict, Verdict::Ok, "{:?}", result);
+    }
+
+    /// For any finite arguments, the result of `newton` has the properties
+    /// that the Lean theorems give, up to rounding, wherever the oracle can
+    /// establish their hypotheses.
+    #[test]
+    fn newton_result_has_the_proved_properties(call in newton_any_call()) {
+        let result = call.newton();
+        match ask(&call.request(Check::NewtonBound, &result)) {
+            Verdict::Ok => {}
+            Verdict::Skip(reason) => return Err(TestCaseError::reject(reason)),
+            Verdict::Fail(reason) => prop_assert!(false, "{reason}: {result:?}"),
+        }
+    }
 
     /// Where `f64` arithmetic is exact, `bisect` returns exactly what the
     /// Lean definitions compute: the same outcome, after the same number of

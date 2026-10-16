@@ -27,9 +27,22 @@ There are two checks of `thole_roots::brent`.
   that bisection has would skip every call that takes a step.
 - `checkBrentBound`: the result has the properties that the theorems in
   `Thole/Roots/Brent.lean` give, up to stated rounding errors.
+
+There are two checks of `thole_roots::newton`, which takes a starting point
+and a second polynomial for the derivative instead of a bracket.
+
+- `checkNewtonSpec`: the result is exactly what the program of `Newton.lean`
+  computes in the model of `f64` arithmetic, as for Brent's method.
+  `NewtonProofs.lean` proves that the program is the specification
+  (`Thole.Roots.newton` and `newtonDone`) when its arithmetic is exact.
+- `checkNewtonBound`: the result has the properties that the theorems in
+  `Thole/Roots/Newton.lean` give, up to stated rounding errors. The guarantee
+  of a short step holds only under hypotheses on the derivative near the
+  result; the check answers `skip` where it cannot establish them.
 -/
 import Thole.Oracle.Poly
 import Thole.Oracle.Brent
+import Thole.Oracle.Newton
 import Thole.Roots.Bisection.Defs
 
 namespace Thole.Oracle
@@ -242,6 +255,142 @@ def checkBrentBound (c : BracketCall) (r : BracketResult) : Verdict :=
       require (min (c.brentTol lo) (c.brentTol hi) ≤ (hi - lo) / 2 * slack + 2 * minPositive)
         "the stopping test holds" .ok
 
+/-! ### Newton's method -/
+
+/-- A call of `thole_roots::newton` on a polynomial and a second polynomial
+for its derivative. -/
+structure NewtonCall where
+  /-- The coefficients of `f`, lowest degree first. -/
+  coeffs : List ℚ
+  /-- The coefficients of the derivative that is passed, lowest degree
+  first. -/
+  dcoeffs : List ℚ
+  /-- The starting point. -/
+  x0 : ℚ
+  /-- `Options::tol.abs`. -/
+  abs : ℚ
+  /-- `Options::tol.rel`. -/
+  rel : ℚ
+  /-- `Options::max_iter`. -/
+  maxIter : ℕ
+
+/-- `Tolerance::bound`. -/
+def NewtonCall.tol (c : NewtonCall) (x : ℚ) : ℚ :=
+  c.abs + c.rel * |x|
+
+deriving instance DecidableEq for NewtonOutcome
+
+/-- How a result is written in a reason. -/
+def NewtonOutcome.describe : NewtonOutcome ℚ → String
+  | .root x step iterations => s!"the root {x} after {iterations} steps, the last of {step}"
+  | .notConverged x => s!"no convergence, ending at {x}"
+  | .zeroDerivative x => s!"a zero derivative at {x}"
+  | .nonFiniteStep x => s!"a step that is not finite from {x}"
+  | .nanValue x => s!"NaN from f at {x}"
+  | .nanDerivative x => s!"NaN from the derivative at {x}"
+
+/-- The outcome of the model with its values as rational numbers, or `none`
+if one of them is not finite. -/
+def NewtonOutcome.toExact : NewtonOutcome F64 → Option (NewtonOutcome ℚ)
+  | .root (.fin x) (.fin step) n => some (.root x step n)
+  | .notConverged (.fin x) => some (.notConverged x)
+  | .zeroDerivative (.fin x) => some (.zeroDerivative x)
+  | .nonFiniteStep (.fin x) => some (.nonFiniteStep x)
+  | .nanValue (.fin x) => some (.nanValue x)
+  | .nanDerivative (.fin x) => some (.nanDerivative x)
+  | _ => none
+
+/-- Checks that the result is exactly what the program of `Newton.lean`
+computes in `f64` arithmetic: the polynomials are evaluated as `Poly::eval`
+does (`hornerG`), and the tolerance as `Tolerance::bound` does. -/
+def checkNewtonSpec (c : NewtonCall) (r : NewtonOutcome ℚ) : Verdict :=
+  if ¬(0 ≤ c.abs ∧ 0 ≤ c.rel) then .skip "the arguments are not valid"
+  else
+    let A := Arith.f64
+    let f := hornerG A (c.coeffs.map .fin)
+    let df := hornerG A (c.dcoeffs.map .fin)
+    let tol := fun x => A.add (.fin c.abs) (A.mul (.fin c.rel) (A.abs x))
+    match (newtonCallG A f df tol (.fin c.x0) c.maxIter).toExact with
+    | some expected => require (r == expected) s!"the model ends with {expected.describe}" .ok
+    | none => .skip "the model leaves the finite numbers"
+
+/-- The coefficients of the derivative of a polynomial, from the term of
+degree `k` on. -/
+def derivFrom : ℕ → List ℚ → List ℚ
+  | _, [] => []
+  | k, c :: cs => k * c :: derivFrom (k + 1) cs
+
+/-- The coefficients of the derivative of the polynomial with the given
+coefficients. -/
+def derivCoeffs (coeffs : List ℚ) : List ℚ :=
+  derivFrom 1 (coeffs.drop 1)
+
+/-- Checks the properties that the theorems give for the result of
+`thole_roots::newton`.
+
+The theorems are about a derivative that is the derivative of `f`, so the
+check answers `skip` unless the second polynomial is exactly that.
+
+For a root, the iteration limit is respected and one of the two stopping
+tests holds: the value of `f` at `x` is within the rounding error of zero, or
+the last step is at most the tolerance long. In the second case the check
+then looks for the hypotheses of `newtonStep_exists_root` around `x`, and
+if they hold, requires `f` to change sign within the bound that the theorem
+gives, widened by the rounding of the last step. It
+answers `skip` when the hypotheses cannot be established, for example near a
+multiple root.
+
+The interval and the rounding allowance are first-order bounds derived here,
+not proved. With `u` the unit roundoff, `s` the last step and `E_f`, `E_df`
+the rounding errors of evaluating `f` and the derivative near `x`
+(`hornerError`): the step that `f64` arithmetic takes differs from the exact
+Newton step from the same point by at most
+`e = 4u(|x| + |s|) + 8(E_f + (2|s| + minPositive) E_df) / |f'(x)|`, provided
+that the derivative stays above `|f'(x)| / 2` on the interval of half-width
+`w = 4(|s| + e)` around `x`, and that `E_df` is at most an eighth of
+`|f'(x)|`. With `L` a bound on `|f''|` there, `newtonStep_exists_root` then
+applies to the exact step with `m = |f'(x)| / 2`, and puts a root within
+`(|s| + e) / 2 + e` of `x`.
+
+Errors other than a root are not about anything the theorems say, apart from
+a zero derivative, which must be zero up to rounding. -/
+def checkNewtonBound (c : NewtonCall) (r : NewtonOutcome ℚ) : Verdict :=
+  if ¬(0 ≤ c.abs ∧ 0 ≤ c.rel) then .skip "the arguments are not valid"
+  else if c.dcoeffs != derivCoeffs c.coeffs then .skip "df is not the derivative of f"
+  else
+    match r with
+    | .root x s 0 =>
+      require (x == c.x0 && s == 0) "no step was taken, but the result is not x0" <|
+      require (!signCertain c.coeffs x) "f is not zero at x0" .ok
+    | .root x s k =>
+      let zero := !signCertain c.coeffs x
+      let short := |s| ≤ c.tol x * slack + minPositive
+      require (k ≤ c.maxIter) "more steps than the iteration limit" <|
+      require (zero || short) "neither stopping test holds" <|
+      if !short then .ok
+      else
+        let u := unitRoundoff
+        let R := |x| + 1
+        let D := |horner c.dcoeffs x|
+        let L := horner ((derivCoeffs c.dcoeffs).map (|·|)) R
+        let EF := hornerError c.coeffs R
+        let ED := hornerError c.dcoeffs R
+        if !(0 < D && 8 * ED ≤ D) then .skip "the derivative is too close to zero at x"
+        else
+          let e := 4 * u * (|x| + |s|) + 8 * (EF + (2 * |s| + minPositive) * ED) / D
+          let w := 4 * (|s| + e)
+          if !(w ≤ 1 && L * w ≤ D / 2) then
+            .skip "the hypotheses of newtonStep_exists_root cannot be established"
+          else
+            let τ := (|s| + e) / 2 + e
+            let f := horner c.coeffs
+            require (decide (SignChange f (x - τ) (x + τ)) || !signCertain c.coeffs (x - τ) ||
+                !signCertain c.coeffs (x + τ))
+              s!"no root within {τ} of x" .ok
+    | .zeroDerivative x =>
+      require (!signCertain c.dcoeffs x) "the derivative is not zero at x" .ok
+    | _ => .ok
+
 /-! ### Requests -/
 
 /-- Reads the arguments shared by the checks:
@@ -266,6 +415,35 @@ def parseBracket (args : List String) : Except String (BracketCall × BracketRes
     | _ => throw "unknown result"
   pure (call, result)
 
+/-- Reads the arguments of a call of `thole_roots::newton`:
+`x0 abs rel max_iter n c_0 ... c_(n-1) m d_0 ... d_(m-1)`, then the result as
+`root x step iterations`, `not-converged x`, `zero-derivative x`,
+`non-finite-step x`, `nan-value x` or `nan-derivative x`. -/
+def parseNewton (args : List String) : Except String (NewtonCall × NewtonOutcome ℚ) := do
+  let x0 :: abs :: rel :: maxIter :: n :: rest := args | throw "too few arguments"
+  let n ← parseNat n
+  if rest.length < n then throw "too few coefficients"
+  let m :: rest' := rest.drop n | throw "too few arguments"
+  let m ← parseNat m
+  if rest'.length < m then throw "too few coefficients"
+  let call : NewtonCall := {
+    coeffs := ← (rest.take n).mapM parseF64
+    dcoeffs := ← (rest'.take m).mapM parseF64
+    x0 := ← parseF64 x0
+    abs := ← parseF64 abs
+    rel := ← parseF64 rel
+    maxIter := ← parseNat maxIter }
+  let result ← match rest'.drop m with
+    | ["root", x, step, iterations] =>
+      pure (.root (← parseF64 x) (← parseF64 step) (← parseNat iterations))
+    | ["not-converged", x] => pure (.notConverged (← parseF64 x))
+    | ["zero-derivative", x] => pure (.zeroDerivative (← parseF64 x))
+    | ["non-finite-step", x] => pure (.nonFiniteStep (← parseF64 x))
+    | ["nan-value", x] => pure (.nanValue (← parseF64 x))
+    | ["nan-derivative", x] => pure (.nanDerivative (← parseF64 x))
+    | _ => throw "unknown result"
+  pure (call, result)
+
 /-- The requests of this area, by name. -/
 def rootsRequests : List (String × (List String → Except String Verdict)) :=
   [("roots.bisect.spec", fun args => do
@@ -279,6 +457,12 @@ def rootsRequests : List (String × (List String → Except String Verdict)) :=
       pure (checkBrentSpec call result)),
    ("roots.brent.bound", fun args => do
       let (call, result) ← parseBracket args
-      pure (checkBrentBound call result))]
+      pure (checkBrentBound call result)),
+   ("roots.newton.spec", fun args => do
+      let (call, result) ← parseNewton args
+      pure (checkNewtonSpec call result)),
+   ("roots.newton.bound", fun args => do
+      let (call, result) ← parseNewton args
+      pure (checkNewtonBound call result))]
 
 end Thole.Oracle

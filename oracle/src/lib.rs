@@ -15,6 +15,7 @@
 //! into any crate.
 
 mod poly;
+pub mod quad;
 pub mod roots;
 
 use std::io::{BufRead, BufReader, Write};

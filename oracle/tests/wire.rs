@@ -66,6 +66,8 @@ fn the_oracle_refuses_what_it_cannot_read() {
         "roots.bisect.spec".to_owned(),
         "roots.brent.spec".to_owned(),
         "roots.brent.bound".to_owned(),
+        "roots.newton.spec".to_owned(),
+        "roots.newton.bound".to_owned(),
         format!("f64.add {} {}", bits(1.0), bits(f64::NAN)),
     ] {
         let answer = oracle.ask_raw(&request);

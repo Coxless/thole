@@ -4,7 +4,7 @@ Pure Rust, no C/Fortran: scientific computing with every algorithm implemented f
 
 A family of scientific computing crates written in pure Rust. It does not rely on external computation engines such as BLAS or LAPACK: every numerical algorithm is implemented from scratch. Everything is callable from Python. The algorithms are also defined in Lean 4: their mathematical properties are proved there, and the results of the Rust code are checked against those definitions.
 
-**Status: early development.** Bisection and Brent's method are implemented so far. The principles and the roadmap are in [CONCEPT.md](CONCEPT.md).
+**Status: early development.** Stage 1 is implemented: root finding (bisection, Brent's method, Newton's method) and numerical integration (Gauss-Legendre, adaptive Gauss-Kronrod). The principles and the roadmap are in [CONCEPT.md](CONCEPT.md).
 
 ```rust
 use thole::roots::{Options, bisect};
@@ -18,6 +18,14 @@ from thole.roots import bisect
 
 root = bisect(lambda x: x * x - 2, 0, 2)
 assert abs(root.x - 2**0.5) < 1e-11
+```
+
+```python
+import math
+from thole.quad import gauss_kronrod
+
+integral = gauss_kronrod(math.exp, 0, 1)
+assert abs(integral.value - (math.e - 1)) < 1e-14
 ```
 
 ## Layout
@@ -39,6 +47,9 @@ Each area keeps its Lean definitions and proofs in `crates/<crate>/lean/`, its P
 |---|---|---|---|
 | `thole-roots` | Bisection: `thole::roots::bisect`, `thole.roots.bisect` | [`Bisection.lean`](crates/thole-roots/lean/Thole/Roots/Bisection.lean): the bracket always contains a root; error at most `(b - a) / 2 ^ (n + 1)` after `n` steps; guarantee of the stopping criterion; convergence. | [`Roots.lean`](oracle/lean/Thole/Oracle/Roots.lean): the same outcome, step count and bracket as the Lean definitions where `f64` arithmetic is exact; the proved properties up to rounding for any finite input. |
 | `thole-roots` | Brent's method: `thole::roots::brent`, `thole.roots.brent` | [`Brent.lean`](crates/thole-roots/lean/Thole/Roots/Brent.lean): a root always lies between the approximation and the point of opposite sign; guarantee of the stopping criterion; the iteration stops, after at most `2 * (b - a) / t` steps for a tolerance of at least `t`. | [`Roots.lean`](oracle/lean/Thole/Oracle/Roots.lean): the same outcome, step count, approximation and bracket, bit for bit, as the Lean definitions run in a model of `f64` arithmetic ([`Brent.lean`](oracle/lean/Thole/Oracle/Brent.lean), [`BrentProofs.lean`](oracle/lean/Thole/Oracle/BrentProofs.lean)); the proved properties up to rounding. Both for any finite input. |
+| `thole-roots` | Newton's method: `thole::roots::newton`, `thole.roots.newton` | [`Newton.lean`](crates/thole-roots/lean/Thole/Roots/Newton.lean): one step squares the error (quadratic convergence); convergence from close enough to a simple root; after a short step close to a simple root, a root lies within the step, which is the guarantee of the stopping criterion. | [`Roots.lean`](oracle/lean/Thole/Oracle/Roots.lean): the same outcome, step count, approximation and last step, bit for bit, as the Lean definitions run in a model of `f64` arithmetic ([`Newton.lean`](oracle/lean/Thole/Oracle/Newton.lean), [`NewtonProofs.lean`](oracle/lean/Thole/Oracle/NewtonProofs.lean)), for any finite input; the guarantee up to rounding wherever its hypotheses can be established. |
+| `thole-quad` | Gauss-Legendre: `thole::quad::GaussLegendre`, `gauss_legendre`, and the same in `thole.quad` | [`GaussLegendre.lean`](crates/thole-quad/lean/Thole/Quad/GaussLegendre.lean): a rule whose nodes are the roots of an orthogonal polynomial is exact up to degree `2n - 1`; exactness carries over to any interval; symmetry of the Legendre polynomials. | [`Quad.lean`](oracle/lean/Thole/Oracle/Quad.lean): the nodes, the weights and the integrals of polynomials bit for bit as the Lean definitions run in a model of `f64` arithmetic ([`GaussLegendre.lean`](oracle/lean/Thole/Oracle/GaussLegendre.lean), [`QuadProofs.lean`](oracle/lean/Thole/Oracle/QuadProofs.lean)); the Legendre polynomial changes sign around every node; polynomials of degree `2n - 1` are integrated exactly up to rounding. |
+| `thole-quad` | Adaptive Gauss-Kronrod (7 and 15 points): `thole::quad::gauss_kronrod`, `thole.quad.gauss_kronrod` | [`GaussKronrod.lean`](crates/thole-quad/lean/Thole/Quad/GaussKronrod.lean): the subintervals always partition the interval; the error is at most the sum of the errors over the subintervals, so local error bounds add up to a global one. | [`Quad.lean`](oracle/lean/Thole/Oracle/Quad.lean): the constants are QUADPACK's and exact up to degree 22 and 13 up to their rounding; the same outcome, estimates and number of subintervals, bit for bit, as the Lean definitions run in a model of `f64` arithmetic ([`GaussKronrod.lean`](oracle/lean/Thole/Oracle/GaussKronrod.lean)); polynomials of degree up to 22 are integrated exactly up to rounding. |
 
 ## Development
 

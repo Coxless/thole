@@ -4,7 +4,7 @@
 
 use std::fmt::Write;
 
-use thole_roots::{Error, Options, Root, bisect, brent};
+use thole_roots::{Error, NewtonRoot, Options, Root, bisect, brent, newton};
 
 use crate::{Poly, bits};
 
@@ -27,6 +27,14 @@ pub enum Check {
     /// to rounding (`checkBrentBound`). Decided for every call with finite
     /// arguments.
     BrentBound,
+    /// The result of [`newton`] is exactly what the Lean definitions compute
+    /// in a model of `f64` arithmetic (`checkNewtonSpec`). Decided for every
+    /// call with finite arguments.
+    NewtonSpec,
+    /// The result of [`newton`] has the properties the Lean theorems give, up
+    /// to rounding (`checkNewtonBound`). The oracle skips the calls in which
+    /// it cannot establish the hypotheses of the theorems.
+    NewtonBound,
 }
 
 /// A call of a bracketing method on a polynomial.
@@ -67,6 +75,7 @@ impl BracketCall {
             Check::BisectBound => "roots.bisect.bound",
             Check::BrentSpec => "roots.brent.spec",
             Check::BrentBound => "roots.brent.bound",
+            _ => panic!("{check:?} is not a check of a bracketing method"),
         };
         let tol = self.options.tol;
         let mut line = format!(
@@ -98,6 +107,104 @@ impl BracketCall {
             Err(Error::MaxIterations { lo, hi, .. }) => {
                 write!(line, " max-iterations {} {}", bits(lo), bits(hi))
             }
+            Err(err) => panic!("the oracle has no counterpart for this error: {err}"),
+        }
+        .unwrap();
+        line
+    }
+}
+
+/// A call of [`newton`] on a polynomial, with a second polynomial for the
+/// derivative.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NewtonCall {
+    /// The function whose root is sought.
+    pub poly: Poly,
+    /// The derivative that is passed. For [`Check::NewtonBound`] it must be
+    /// exactly the derivative of `poly`, or the oracle skips the call.
+    pub deriv: Poly,
+    /// The starting point.
+    pub x0: f64,
+    /// Tolerance and iteration limit.
+    pub options: Options,
+}
+
+impl NewtonCall {
+    /// A call with the derivative of `poly` as `deriv`.
+    ///
+    /// # Panics
+    ///
+    /// If a coefficient of the derivative cannot be computed exactly in
+    /// `f64`.
+    pub fn with_derivative(poly: Poly, x0: f64, options: Options) -> Self {
+        let deriv = Poly(
+            poly.0
+                .iter()
+                .enumerate()
+                .skip(1)
+                .map(|(k, &c)| {
+                    let d = k as f64 * c;
+                    assert_eq!(d / k as f64, c, "the derivative of {poly:?} is not exact");
+                    d
+                })
+                .collect(),
+        );
+        Self {
+            poly,
+            deriv,
+            x0,
+            options,
+        }
+    }
+
+    /// Makes the call.
+    pub fn newton(&self) -> Result<NewtonRoot, Error> {
+        newton(
+            |x| self.poly.eval(x),
+            |x| self.deriv.eval(x),
+            self.x0,
+            &self.options,
+        )
+    }
+
+    /// The request that asks the oracle whether `result` is right for this
+    /// call.
+    ///
+    /// # Panics
+    ///
+    /// If `check` is not a check of [`newton`], or `result` is an error about
+    /// the arguments.
+    pub fn request(&self, check: Check, result: &Result<NewtonRoot, Error>) -> String {
+        let name = match check {
+            Check::NewtonSpec => "roots.newton.spec",
+            Check::NewtonBound => "roots.newton.bound",
+            _ => panic!("{check:?} is not a check of Newton's method"),
+        };
+        let tol = self.options.tol;
+        let mut line = format!(
+            "{name} {} {} {} {}",
+            bits(self.x0),
+            bits(tol.abs),
+            bits(tol.rel),
+            self.options.max_iter,
+        );
+        for poly in [&self.poly, &self.deriv] {
+            write!(line, " {}", poly.0.len()).unwrap();
+            for &c in &poly.0 {
+                write!(line, " {}", bits(c)).unwrap();
+            }
+        }
+        match *result {
+            Ok(NewtonRoot {
+                x,
+                step,
+                iterations,
+            }) => write!(line, " root {} {} {iterations}", bits(x), bits(step)),
+            Err(Error::NotConverged { x, .. }) => write!(line, " not-converged {}", bits(x)),
+            Err(Error::ZeroDerivative { x }) => write!(line, " zero-derivative {}", bits(x)),
+            Err(Error::NonFiniteStep { x }) => write!(line, " non-finite-step {}", bits(x)),
+            Err(Error::NanValue { x }) => write!(line, " nan-value {}", bits(x)),
+            Err(Error::NanDerivative { x }) => write!(line, " nan-derivative {}", bits(x)),
             Err(err) => panic!("the oracle has no counterpart for this error: {err}"),
         }
         .unwrap();

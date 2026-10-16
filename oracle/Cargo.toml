@@ -11,6 +11,7 @@ authors.workspace = true
 publish = false
 
 [dependencies]
+thole-quad.workspace = true
 thole-roots.workspace = true
 
 [dev-dependencies]

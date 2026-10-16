@@ -194,6 +194,20 @@ Decided with Brent's method, the first algorithm that divides:
 
 - **The check against the definition when `f64` arithmetic is not exact**: the second form of 3.5. `roots.brent.spec` requires the outcome, the number of steps, the approximation and the bracket to be those of the program in `oracle/lean/Thole/Oracle/Brent.lean` run in the model of `f64` arithmetic. This fixes the order of the operations in the Rust code: rearranging them changes the rounding, and the check fails.
 
+Decided with Newton's method, the first iteration without a bracket:
+
+- **Results**: an iteration without a bracket returns its own type (`NewtonRoot`: the approximation, the last step, the number of steps), because there is no bracket to report. Its failures that are not about the input (a zero derivative, a step that leaves the finite numbers, the iteration limit) raise the area's `ConvergenceError` in Python.
+- **Guarantees under hypotheses**: a short Newton step means a root is near only close to a simple root. The Lean guarantee (`newtonStep_exists_root`) is therefore stated with hypotheses on the derivative near the result, and `roots.newton.bound` answers `skip` where it cannot establish them for the polynomial at hand. `roots.newton.spec` is decided for every call.
+- **The model of `f64` arithmetic** gained a test for finiteness and constants (`Arith.finite`, `Arith.ofRat`), so that programs with error exits and literals can be written once for both arithmetics.
+
+Decided with numerical integration:
+
+- **Functions and intervals**: `impl FnMut(f64) -> f64` again, on a finite interval `[a, b]`; `a > b` gives the negative integral. A value of the function that is NaN or infinite is an error. Infinite intervals are not supported yet.
+- **Tolerances and results**: the adaptive integrator takes `Options` with a `Tolerance` on the integral and a limit on the number of subintervals, with SciPy's defaults, and returns an `Integral` with an error estimate. The documentation says that an error estimate is not a bound.
+- **Constants**: what can be computed is computed: the Gauss-Legendre nodes by Newton's method on the Legendre recurrence. The Gauss-Kronrod constants are QUADPACK's table; the oracle checks that they are exact up to their rounding (`quad.kronrod.rule`).
+- **Lean**: the theorems of the adaptive integrator hold for any estimate of the subintegrals, and the exactness of Gauss rules is proved from orthogonality (`gauss_exact`). What would need more of Mathlib (the orthogonality of the Legendre recurrence, the weight formula) is stated as not proved, and tested by the oracle.
+- **Python**: one submodule, `thole.quad`, with keyword-only `atol`, `rtol` and `max_subintervals`.
+
 ### Stage 2: core and dense matrix basics
 
 - Scalar traits (f32 and f64 first)
